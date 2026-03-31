@@ -21,7 +21,7 @@ from . import config, version
 
 
 def _get_secrets():
-    """A helper method for loading secrets from either a GCF mount point or the local src/skidname/secrets/secrets.json file
+    """A helper method for loading secrets from either a GCF mount point or the local src/state_parks/secrets/secrets.json file
 
     Raises:
         FileNotFoundError: If the secrets file can't be found.
