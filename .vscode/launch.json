@@ -9,7 +9,8 @@
             "name": "Python Debugger: Module",
             "type": "debugpy",
             "request": "launch",
-            "module": "skidname.main"
+            "module": "state_parks.main",
+            "justMyCode": false
         }
     ]
 }
