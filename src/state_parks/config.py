@@ -6,7 +6,7 @@ import logging
 import socket
 import urllib.request
 
-SKID_NAME = ""
+SKID_NAME = "state-parks"
 
 try:
     url = "http://metadata.google.internal/computeMetadata/v1/project/project-id"
@@ -29,8 +29,6 @@ SENDGRID_SETTINGS = {  #: Settings for SendGridHandler
 LOG_LEVEL = logging.DEBUG
 LOG_FILE_NAME = "log"
 
-FEATURE_LAYER_ITEMID = ""
-JOIN_COLUMN = ""
-ATTACHMENT_LINK_COLUMN = ""
-ATTACHMENT_PATH_COLUMN = ""
-FIELDS = {}
+WORDPRESS_URL = "https://stateparks.stage.utah.gov"
+POSTS_ENDPOINT = "parks"
+PARKS_FEATURE_LAYER_ITEMID = "45847ee7b6a04361b9dae4ee5340a4f1"
