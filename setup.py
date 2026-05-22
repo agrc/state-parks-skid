@@ -41,6 +41,8 @@ setup(
     install_requires=[
         "ugrc-palletjack>=5.0,<6.1",
         "ugrc-supervisor>=3.1.3",
+        "functions-framework>=3,<4",
+        "google-cloud-tasks>=2,<3",
     ],
     extras_require={
         "tests": [
@@ -55,9 +57,5 @@ setup(
     setup_requires=[
         "pytest-runner",
     ],
-    entry_points={
-        "console_scripts": [
-            "state-parks = state_parks.main:process",
-        ]
-    },
+    entry_points={},
 )
