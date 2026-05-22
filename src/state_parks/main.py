@@ -7,7 +7,6 @@ Run the SKIDNAME script as a Cloud Run Job or console entry point.
 import json
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -50,15 +49,8 @@ def _get_secrets():
     raise FileNotFoundError("Secrets folder not found; secrets not loaded.")
 
 
-def _initialize(log_path):
-    """A helper method to set up logging and supervisor
-
-    Args:
-        log_path (Path): File path for the logfile to be written
-
-    Returns:
-        Supervisor: The supervisor object used for sending messages
-    """
+def _initialize():
+    """A helper method to set up logging"""
 
     skid_logger = logging.getLogger(config.SKID_NAME)
     skid_logger.setLevel(config.LOG_LEVEL)
@@ -72,49 +64,13 @@ def _initialize(log_path):
     )
     cli_handler.setFormatter(formatter)
 
-    log_handler = logging.FileHandler(log_path, mode="w")
-    log_handler.setLevel(config.LOG_LEVEL)
-    log_handler.setFormatter(formatter)
-
     skid_logger.addHandler(cli_handler)
-    skid_logger.addHandler(log_handler)
     palletjack_logger.addHandler(cli_handler)
-    palletjack_logger.addHandler(log_handler)
 
     #: Log any warnings at logging.WARNING
     #: Put after everything else to prevent creating a duplicate, default formatter
     #: (all log messages were duplicated if put at beginning)
     logging.captureWarnings(True)
-
-    # skid_logger.debug("Creating Supervisor object")
-    # skid_supervisor = Supervisor(handle_errors=False)
-    # sendgrid_settings = config.SENDGRID_SETTINGS
-    # sendgrid_settings["api_key"] = sendgrid_api_key
-    # skid_supervisor.add_message_handler(
-    #     SendGridHandler(
-    #         sendgrid_settings=sendgrid_settings, client_name=config.SKID_NAME, client_version=version.__version__
-    #     )
-    # )
-
-    # return skid_supervisor
-
-
-def _remove_log_file_handlers(log_name, loggers):
-    """A helper function to remove the file handlers so the tempdir will close correctly
-
-    Args:
-        log_name (str): The log file's filename
-        loggers (List<str>): The loggers that are writing to log_name
-    """
-
-    for logger in loggers:
-        for handler in logger.handlers:
-            try:
-                if log_name in handler.stream.name:
-                    logger.removeHandler(handler)
-                    handler.close()
-            except Exception:
-                pass
 
 
 @functions_framework.http
@@ -132,18 +88,13 @@ def process(request):
     if not post_name:
         return jsonify({"error": "Missing required parameter: post_name"}), 400
 
-    #: Set up secrets, tempdir, supervisor, and logging
-    start = datetime.now()
-
+    #: Set up secrets, tempdir, and logging
     secrets = SimpleNamespace(**_get_secrets())
 
     with TemporaryDirectory() as tempdir:
         tempdir_path = Path(tempdir)
-        log_name = f"{config.LOG_FILE_NAME}_{start.strftime('%Y%m%d-%H%M%S')}.txt"
-        log_path = tempdir_path / log_name
 
-        _initialize(log_path)
-        # skid_supervisor = _initialize(log_path, secrets.SENDGRID_API_KEY)
+        _initialize()
         module_logger = logging.getLogger(config.SKID_NAME)
 
         #: Get our GIS object via the ArcGIS API for Python
@@ -228,33 +179,6 @@ def process(request):
 
         loader = load.ServiceUpdater(gis, config.PARKS_FEATURE_LAYER_ITEMID, working_dir=tempdir_path)
         features_loaded = loader.truncate_and_load(new_data_df)
-
-        end = datetime.now()
-
-        # summary_message = MessageDetails()
-        # summary_message.subject = "Update Summary"
-        # summary_rows = [
-        #     f"{config.SKID_NAME} update {start.strftime('%Y-%m-%d')}",
-        #     "=" * 20,
-        #     "",
-        #     f"Triggered by post: {post_name}",
-        #     f"Start time: {start.strftime('%H:%M:%S')}",
-        #     f"End time: {end.strftime('%H:%M:%S')}",
-        #     f"Duration: {str(end - start)}",
-        #     f"Total records in WordPress: {len(valid_posts)}",
-        #     f"Total records with geometries: {len(valid_merged_data)}",
-        #     f"Total records missing geometries: {len(missing_geometries)}",
-        #     f"Total records updated/created in AGOL: {features_loaded}",
-        # ]
-
-        # summary_message.message = "\n".join(summary_rows)
-        # summary_message.attachments = tempdir_path / log_name
-
-        # skid_supervisor.notify(summary_message)
-
-        #: Remove file handler so the tempdir will close properly
-        loggers = [logging.getLogger(config.SKID_NAME), logging.getLogger("palletjack")]
-        _remove_log_file_handlers(log_name, loggers)
 
     return jsonify({"status": "ok", "post_name": post_name, "features_loaded": features_loaded}), 200
 
