@@ -1,0 +1,20 @@
+<!-- HTML for map popup in Find A Park -->
+<div style="display:grid;gap:5px;grid-template-columns:200px 140px;">
+    <div style="grid-column:1 / span 2;grid-row:1;padding:5px;font-size:24px;">
+        <strong>{label_state}</strong>
+    </div>
+    <div style="grid-column:1;grid-row:2 / span 2;">
+        <img style="border-radius:10px;" src="{thumbnail_url}" alt="Thumbnail" width="200" height="200">
+    </div>
+    <div style="grid-column:2;grid-row:2;padding:5px;justify-self:start;align-self:start;">
+        <div style="display:grid;gap:2px;grid-template-columns:auto auto;"></div>
+        <div style="grid-column:1;grid-row:1;padding:2px;">
+            <a style="background-color:#1C4C10;border-radius:999px;color:#ffffff;display:inline-block;padding:8px 32px;text-decoration:none;font-size:16px;"
+                href="{link}" target="_blank">More Info</a>
+        </div>
+        <div style="grid-column:1;grid-row:2;padding:2px;">
+            <a style="background-color:#1C4C10;border-radius:999px;color:#ffffff;display:inline-block;padding:8px 32px;text-decoration:none;font-size:16px;"
+                href="{expression/expr2}" target="_blank">Directions</a>
+        </div>
+    </div>
+</div>
