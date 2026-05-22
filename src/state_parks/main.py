@@ -187,6 +187,7 @@ def process():
             lambda x: x["rendered"] if isinstance(x, dict) else x
         )
         valid_merged_data["link"] = valid_merged_data["link_wp"].fillna("")
+        #: If a field name isn't in this list, it will remain in the feature service but be blank for all features.
         new_data_df = valid_merged_data.reindex(
             columns=[
                 "OBJECTID",
@@ -199,6 +200,8 @@ def process():
                 "facilities",
                 "truncated_name",
                 "full_name",
+                "lat",
+                "long",
                 "SHAPE",
             ]
         )
