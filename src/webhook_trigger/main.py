@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+# * coding: utf8 *
+"""
+Webhook trigger: receives an authenticated HTTP request, clears the Cloud Tasks queue,
+and enqueues a new task for the state-parks worker service.
+"""
+
+import json
+import logging
+from pathlib import Path
+from urllib.parse import urlencode
+
+import functions_framework
+from flask import jsonify
+from google.cloud import tasks_v2
+
+from . import config
+
+module_logger = logging.getLogger(config.SKID_NAME)
+
+
+def _get_secrets():
+    """Load secrets from the Cloud Function mount point or the local secrets directory.
+
+    Raises:
+        FileNotFoundError: If no secrets file can be found.
+
+    Returns:
+        dict: The secrets .json loaded as a dictionary.
+    """
+
+    secret_folder = Path("/secrets")
+
+    #: Try to get the secrets from the Cloud Function mount point
+    if secret_folder.exists():
+        return json.loads(Path("/secrets/app/secrets.json").read_text(encoding="utf-8"))
+
+    #: Otherwise, try to load a local copy for local development
+    secret_folder = Path(__file__).parent / "secrets"
+    if secret_folder.exists():
+        return json.loads((secret_folder / "secrets.json").read_text(encoding="utf-8"))
+
+    raise FileNotFoundError("Secrets folder not found; secrets not loaded.")
+
+
+@functions_framework.http
+def trigger(request):
+    """Cloud Run HTTP endpoint that authenticates the caller, clears the Cloud Tasks queue,
+    and enqueues a new task targeting the worker service for the given post.
+
+    URL parameters:
+        api_key (str): Must match the API_KEY value in secrets.json.
+        post_name (str): The WordPress post slug/name to process.
+
+    Returns:
+        JSON response with HTTP 200 on success, 401 on auth failure, or 400 on missing parameters.
+    """
+
+    secrets = _get_secrets()
+
+    api_key = request.args.get("api_key")
+    if api_key != secrets.get("API_KEY"):
+        module_logger.info("Authentication failed for incoming request")
+        return jsonify({"error": "Unauthorized"}), 401
+
+    post_name = request.args.get("post_name")
+    if not post_name:
+        return jsonify({"error": "Missing required parameter: post_name"}), 400
+
+    client = tasks_v2.CloudTasksClient()
+
+    #: Delete all existing tasks in the queue before adding a new one
+    existing_tasks = client.list_tasks(parent=config.CLOUD_TASKS_QUEUE)
+    for task in existing_tasks:
+        client.delete_task(name=task.name)
+        module_logger.info("Deleted existing task: %s", task.name)
+
+    #: Build the worker URL with post_name as a query parameter
+    worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
+    new_task = {
+        "http_request": {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": worker_url,
+        }
+    }
+
+    created = client.create_task(parent=config.CLOUD_TASKS_QUEUE, task=new_task)
+    module_logger.info("Created task %s for post_name '%s'", created.name, post_name)
+
+    return jsonify({"status": "ok", "task": created.name}), 200
