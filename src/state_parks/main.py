@@ -10,16 +10,12 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from urllib.parse import urlencode
 
 import arcgis
 import functions_framework
 from flask import jsonify
-from google.cloud import tasks_v2
 from palletjack import extract, load, transform, utils
 
-# from supervisor.message_handlers import SendGridHandler
-# from supervisor.models import MessageDetails, Supervisor
 from . import config, version
 
 module_logger = logging.getLogger(config.SKID_NAME)
@@ -187,53 +183,6 @@ def _get_park_name(title_from_wordpress):
     rendered_name = title_from_wordpress["rendered"]
     name_prefix = rendered_name.split("State Park")[0]
     return name_prefix.strip()
-
-
-@functions_framework.http
-def trigger(request):
-    """Cloud Run HTTP endpoint that authenticates the caller, clears the Cloud Tasks queue,
-    and enqueues a new task targeting the worker service for the given post.
-
-    URL parameters:
-        api_key (str): Must match the API_KEY value in secrets.json.
-        post_name (str): The WordPress post slug/name to process.
-
-    Returns:
-        JSON response with HTTP 200 on success, 401 on auth failure, or 400 on missing parameters.
-    """
-
-    secrets = _get_secrets()
-
-    api_key = request.args.get("api_key")
-    if api_key != secrets.get("API_KEY"):
-        module_logger.info("Authentication failed for incoming request")
-        return jsonify({"error": "Unauthorized"}), 401
-
-    post_name = request.args.get("post_name")
-    if not post_name:
-        return jsonify({"error": "Missing required parameter: post_name"}), 400
-
-    client = tasks_v2.CloudTasksClient()
-
-    #: Delete all existing tasks in the queue before adding a new one
-    existing_tasks = client.list_tasks(parent=config.CLOUD_TASKS_QUEUE)
-    for task in existing_tasks:
-        client.delete_task(name=task.name)
-        module_logger.info("Deleted existing task: %s", task.name)
-
-    #: Build the worker URL with post_name as a query parameter
-    worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
-    new_task = {
-        "http_request": {
-            "http_method": tasks_v2.HttpMethod.POST,
-            "url": worker_url,
-        }
-    }
-
-    created = client.create_task(parent=config.CLOUD_TASKS_QUEUE, task=new_task)
-    module_logger.info("Created task %s for post_name '%s'", created.name, post_name)
-
-    return jsonify({"status": "ok", "task": created.name}), 200
 
 
 if __name__ == "__main__":
