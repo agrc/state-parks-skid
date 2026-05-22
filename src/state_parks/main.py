@@ -11,13 +11,19 @@ from datetime import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from urllib.parse import urlencode
 
 import arcgis
+import functions_framework
+from flask import jsonify
+from google.cloud import tasks_v2
 from palletjack import extract, load, transform, utils
-from supervisor.message_handlers import SendGridHandler
-from supervisor.models import MessageDetails, Supervisor
 
+# from supervisor.message_handlers import SendGridHandler
+# from supervisor.models import MessageDetails, Supervisor
 from . import config, version
+
+module_logger = logging.getLogger(config.SKID_NAME)
 
 
 def _get_secrets():
@@ -44,12 +50,11 @@ def _get_secrets():
     raise FileNotFoundError("Secrets folder not found; secrets not loaded.")
 
 
-def _initialize(log_path, sendgrid_api_key):
+def _initialize(log_path):
     """A helper method to set up logging and supervisor
 
     Args:
         log_path (Path): File path for the logfile to be written
-        sendgrid_api_key (str): The API key for sendgrid for this particular application
 
     Returns:
         Supervisor: The supervisor object used for sending messages
@@ -81,17 +86,17 @@ def _initialize(log_path, sendgrid_api_key):
     #: (all log messages were duplicated if put at beginning)
     logging.captureWarnings(True)
 
-    skid_logger.debug("Creating Supervisor object")
-    skid_supervisor = Supervisor(handle_errors=False)
-    sendgrid_settings = config.SENDGRID_SETTINGS
-    sendgrid_settings["api_key"] = sendgrid_api_key
-    skid_supervisor.add_message_handler(
-        SendGridHandler(
-            sendgrid_settings=sendgrid_settings, client_name=config.SKID_NAME, client_version=version.__version__
-        )
-    )
+    # skid_logger.debug("Creating Supervisor object")
+    # skid_supervisor = Supervisor(handle_errors=False)
+    # sendgrid_settings = config.SENDGRID_SETTINGS
+    # sendgrid_settings["api_key"] = sendgrid_api_key
+    # skid_supervisor.add_message_handler(
+    #     SendGridHandler(
+    #         sendgrid_settings=sendgrid_settings, client_name=config.SKID_NAME, client_version=version.__version__
+    #     )
+    # )
 
-    return skid_supervisor
+    # return skid_supervisor
 
 
 def _remove_log_file_handlers(log_name, loggers):
@@ -112,8 +117,20 @@ def _remove_log_file_handlers(log_name, loggers):
                 pass
 
 
-def process():
-    """The main function that does all the work."""
+@functions_framework.http
+def process(request):
+    """Cloud Run HTTP endpoint that updates the AGOL feature service with data from WordPress
+
+    URL parameters:
+        post_name (str): The WordPress post slug/name identifying the park triggering the update.
+
+    Returns:
+        JSON response with HTTP 200 on success or 400 on missing parameters.
+    """
+
+    post_name = request.args.get("post_name")
+    if not post_name:
+        return jsonify({"error": "Missing required parameter: post_name"}), 400
 
     #: Set up secrets, tempdir, supervisor, and logging
     start = datetime.now()
@@ -125,7 +142,8 @@ def process():
         log_name = f"{config.LOG_FILE_NAME}_{start.strftime('%Y%m%d-%H%M%S')}.txt"
         log_path = tempdir_path / log_name
 
-        skid_supervisor = _initialize(log_path, secrets.SENDGRID_API_KEY)
+        _initialize(log_path)
+        # skid_supervisor = _initialize(log_path, secrets.SENDGRID_API_KEY)
         module_logger = logging.getLogger(config.SKID_NAME)
 
         #: Get our GIS object via the ArcGIS API for Python
@@ -150,6 +168,8 @@ def process():
         valid_posts = valid_posts.reindex(
             columns=["title", "thumbnail_url", "activities", "facilities", "park_name", "link"]
         )
+
+        module_logger.info("Update triggered by WordPress post: %s", post_name)
 
         existing_data = (
             gis.content.get(config.PARKS_FEATURE_LAYER_ITEMID).layers[0].query(where="1=1", out_fields="*").sdf
@@ -211,29 +231,32 @@ def process():
 
         end = datetime.now()
 
-        summary_message = MessageDetails()
-        summary_message.subject = "Update Summary"
-        summary_rows = [
-            f"{config.SKID_NAME} update {start.strftime('%Y-%m-%d')}",
-            "=" * 20,
-            "",
-            f"Start time: {start.strftime('%H:%M:%S')}",
-            f"End time: {end.strftime('%H:%M:%S')}",
-            f"Duration: {str(end - start)}",
-            f"Total records in WordPress: {len(valid_posts)}",
-            f"Total records with geometries: {len(valid_merged_data)}",
-            f"Total records missing geometries: {len(missing_geometries)}",
-            f"Total records updated/created in AGOL: {features_loaded}",
-        ]
+        # summary_message = MessageDetails()
+        # summary_message.subject = "Update Summary"
+        # summary_rows = [
+        #     f"{config.SKID_NAME} update {start.strftime('%Y-%m-%d')}",
+        #     "=" * 20,
+        #     "",
+        #     f"Triggered by post: {post_name}",
+        #     f"Start time: {start.strftime('%H:%M:%S')}",
+        #     f"End time: {end.strftime('%H:%M:%S')}",
+        #     f"Duration: {str(end - start)}",
+        #     f"Total records in WordPress: {len(valid_posts)}",
+        #     f"Total records with geometries: {len(valid_merged_data)}",
+        #     f"Total records missing geometries: {len(missing_geometries)}",
+        #     f"Total records updated/created in AGOL: {features_loaded}",
+        # ]
 
-        summary_message.message = "\n".join(summary_rows)
-        summary_message.attachments = tempdir_path / log_name
+        # summary_message.message = "\n".join(summary_rows)
+        # summary_message.attachments = tempdir_path / log_name
 
-        skid_supervisor.notify(summary_message)
+        # skid_supervisor.notify(summary_message)
 
         #: Remove file handler so the tempdir will close properly
         loggers = [logging.getLogger(config.SKID_NAME), logging.getLogger("palletjack")]
         _remove_log_file_handlers(log_name, loggers)
+
+    return jsonify({"status": "ok", "post_name": post_name, "features_loaded": features_loaded}), 200
 
 
 def _get_park_name(title_from_wordpress):
@@ -242,6 +265,53 @@ def _get_park_name(title_from_wordpress):
     return name_prefix.strip()
 
 
-#: Putting this here means you can call the file via `python main.py` and it will run. Useful for pre-GCF testing.
+@functions_framework.http
+def trigger(request):
+    """Cloud Run HTTP endpoint that authenticates the caller, clears the Cloud Tasks queue,
+    and enqueues a new task targeting the worker service for the given post.
+
+    URL parameters:
+        api_key (str): Must match the API_KEY value in secrets.json.
+        post_name (str): The WordPress post slug/name to process.
+
+    Returns:
+        JSON response with HTTP 200 on success, 401 on auth failure, or 400 on missing parameters.
+    """
+
+    secrets = _get_secrets()
+
+    api_key = request.args.get("api_key")
+    if api_key != secrets.get("API_KEY"):
+        module_logger.info("Authentication failed for incoming request")
+        return jsonify({"error": "Unauthorized"}), 401
+
+    post_name = request.args.get("post_name")
+    if not post_name:
+        return jsonify({"error": "Missing required parameter: post_name"}), 400
+
+    client = tasks_v2.CloudTasksClient()
+
+    #: Delete all existing tasks in the queue before adding a new one
+    existing_tasks = client.list_tasks(parent=config.CLOUD_TASKS_QUEUE)
+    for task in existing_tasks:
+        client.delete_task(name=task.name)
+        module_logger.info("Deleted existing task: %s", task.name)
+
+    #: Build the worker URL with post_name as a query parameter
+    worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
+    new_task = {
+        "http_request": {
+            "http_method": tasks_v2.HttpMethod.POST,
+            "url": worker_url,
+        }
+    }
+
+    created = client.create_task(parent=config.CLOUD_TASKS_QUEUE, task=new_task)
+    module_logger.info("Created task %s for post_name '%s'", created.name, post_name)
+
+    return jsonify({"status": "ok", "task": created.name}), 200
+
+
 if __name__ == "__main__":
-    process()
+    mock_request = SimpleNamespace(args={"post_name": "manual_run"})
+    process(mock_request)
