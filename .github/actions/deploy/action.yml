@@ -26,7 +26,7 @@ runs:
         token_format: "access_token"
 
     - name: 🚀 Deploy Main Skid Cloud Function
-      id: deploy
+      id: deploy-skid
       uses: google-github-actions/deploy-cloud-functions@v4
       with:
         name: state-parks-skid
@@ -43,7 +43,7 @@ runs:
         event_trigger_retry: false
 
     - name: 🚀 Deploy Webhook Trigger Cloud Function
-      id: deploy
+      id: deploy-webhook
       uses: google-github-actions/deploy-cloud-functions@v4
       with:
         name: webhook-trigger
