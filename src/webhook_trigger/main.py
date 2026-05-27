@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import functions_framework
-from flask import jsonify
+from flask import jsonify, request
 from google.cloud import tasks_v2
 from google.protobuf import timestamp_pb2
 
@@ -62,12 +62,13 @@ def trigger(request):
 
     api_key = request.args.get("api_key")
     if api_key != secrets.get("API_KEY"):
-        module_logger.info("Authentication failed for incoming request")
+        module_logger.error("Authentication failed for incoming request")
         return jsonify({"error": "Invalid Trigger API Key"}), 401
 
-    # post_name = request.args.get("post_name")
-    # if not post_name:
-    #     return jsonify({"error": "Missing required parameter: post_name"}), 400
+    post_name = request.form.get("post_name")
+    if not post_name:
+        module_logger.error("Missing required parameter: post_name")
+        return jsonify({"error": "Missing required parameter: post_name"}), 400
 
     client = tasks_v2.CloudTasksClient()
 
