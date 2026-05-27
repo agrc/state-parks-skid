@@ -63,7 +63,7 @@ def trigger(request):
     api_key = request.args.get("api_key")
     if api_key != secrets.get("API_KEY"):
         module_logger.info("Authentication failed for incoming request")
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "Invalid Trigger API Key"}), 401
 
     post_name = request.args.get("post_name")
     if not post_name:
@@ -80,7 +80,7 @@ def trigger(request):
     #: Build the worker URL with post_name as a query parameter
     worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
     schedule_time = timestamp_pb2.Timestamp()
-    schedule_time.FromDatetime(datetime.now(tz=timezone.utc) + timedelta(seconds=10))
+    schedule_time.FromDatetime(datetime.now(tz=timezone.utc) + timedelta(seconds=config.QUEUE_DELAY_SECONDS))
     new_task = tasks_v2.Task(
         http_request=tasks_v2.HttpRequest(
             http_method=tasks_v2.HttpMethod.POST,
