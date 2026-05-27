@@ -7,12 +7,14 @@ and enqueues a new task for the state-parks worker service.
 
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
 import functions_framework
 from flask import jsonify
 from google.cloud import tasks_v2
+from google.protobuf import timestamp_pb2
 
 from . import config
 
@@ -77,12 +79,20 @@ def trigger(request):
 
     #: Build the worker URL with post_name as a query parameter
     worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
-    new_task = {
-        "http_request": {
-            "http_method": tasks_v2.HttpMethod.POST,
-            "url": worker_url,
-        }
-    }
+    schedule_time = timestamp_pb2.Timestamp()
+    schedule_time.FromDatetime(datetime.now(tz=timezone.utc) + timedelta(seconds=10))
+    new_task = tasks_v2.Task(
+        http_request=tasks_v2.HttpRequest(
+            http_method=tasks_v2.HttpMethod.POST,
+            url=worker_url,
+            # oidc_token=tasks_v2.OidcToken(
+            #     service_account_email=service_account_email,
+            #     audience=audience,
+            # ),
+            # body=payload,
+        ),
+        schedule_time=schedule_time,
+    )
 
     created = client.create_task(parent=config.CLOUD_TASKS_QUEUE, task=new_task)
     module_logger.info("Created task %s for post_name '%s'", created.name, post_name)
