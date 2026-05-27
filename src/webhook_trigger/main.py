@@ -65,9 +65,9 @@ def trigger(request):
         module_logger.info("Authentication failed for incoming request")
         return jsonify({"error": "Invalid Trigger API Key"}), 401
 
-    post_name = request.args.get("post_name")
-    if not post_name:
-        return jsonify({"error": "Missing required parameter: post_name"}), 400
+    # post_name = request.args.get("post_name")
+    # if not post_name:
+    #     return jsonify({"error": "Missing required parameter: post_name"}), 400
 
     client = tasks_v2.CloudTasksClient()
 
