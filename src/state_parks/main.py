@@ -102,8 +102,11 @@ def process(request):
 
         parks_wordpress_loader = extract.WordpressRestLoader(config.WORDPRESS_URL)
         parks_posts = parks_wordpress_loader.get_from_endpoint(config.POSTS_ENDPOINT, expand_acf=True)
+
+        #: These are the posts that we want to pull from
         valid_posts = parks_posts.query("status == 'publish' and page_type == 'parent'").copy()
 
+        #: Get the thumbnail URL so we can hotlink directly to it rather than store the image in AGOL
         valid_posts["thumbnail_url"] = valid_posts["featured_media"].apply(
             lambda media_id: (
                 parks_wordpress_loader.get_media_item(media_id).media_details.sizes["medium"].source_url
@@ -112,6 +115,8 @@ def process(request):
             )
         )
         valid_posts["park_name"] = valid_posts["title"].apply(_get_park_name).str.lower()
+
+        #: This controls which fields we're pulling from WordPress
         valid_posts = valid_posts.reindex(
             columns=["title", "thumbnail_url", "activities", "facilities", "park_name", "link"]
         )
@@ -123,6 +128,7 @@ def process(request):
         )
         existing_data["truncated_name"] = existing_data["truncated_name"].str.lower()
 
+        #: We join on the park name with "State Park" stripped off and lowercased.
         merged_data = existing_data.merge(
             valid_posts,
             left_on="truncated_name",
@@ -180,6 +186,14 @@ def process(request):
 
 
 def _get_park_name(title_from_wordpress):
+    """Get the park name and strip off "State Park" so that it's just "Dead Horse Point"
+
+    Args:
+        title_from_wordpress (str): The post title in WordPress
+
+    Returns:
+        str: Title with "State Park" stripped
+    """
     rendered_name = title_from_wordpress["rendered"]
     name_prefix = rendered_name.split("State Park")[0]
     return name_prefix.strip()
