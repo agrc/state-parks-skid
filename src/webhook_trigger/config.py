@@ -26,3 +26,5 @@ LOG_LEVEL = logging.DEBUG
 CLOUD_TASKS_QUEUE = f"projects/{HOST_NAME}/locations/us-central1/queues/cloud-tasks-queue-skid"
 #: URL of the state-parks worker Cloud Run function
 WORKER_URL = "https://state-parks-skid-pn4shk4ynq-uc.a.run.app"
+
+QUEUE_DELAY_SECONDS = 10
