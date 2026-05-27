@@ -85,10 +85,10 @@ def trigger(request):
         http_request=tasks_v2.HttpRequest(
             http_method=tasks_v2.HttpMethod.POST,
             url=worker_url,
-            # oidc_token=tasks_v2.OidcToken(
-            #     service_account_email=service_account_email,
-            #     audience=audience,
-            # ),
+            oidc_token=tasks_v2.OidcToken(
+                service_account_email=secrets.get("SA_EMAIL"),
+                audience=config.WORKER_URL,
+            ),
             # body=payload,
         ),
         schedule_time=schedule_time,
