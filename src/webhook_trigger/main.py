@@ -65,7 +65,8 @@ def trigger(request):
         module_logger.error("Authentication failed for incoming request")
         return jsonify({"error": "Invalid Trigger API Key"}), 401
 
-    post_name = request.form.get("post_name")
+    payload = request.get_json()
+    post_name = payload["post"].get("post_name")
     if not post_name:
         module_logger.error("Missing required parameter: post_name")
         return jsonify({"error": "Missing required parameter: post_name"}), 400
