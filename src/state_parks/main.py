@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import arcgis
 import functions_framework
+import geopandas as gpd
 from flask import jsonify
 from palletjack import extract, load, transform, utils
 
@@ -118,7 +119,16 @@ def process(request):
 
         #: This controls which fields we're pulling from WordPress
         valid_posts = valid_posts.reindex(
-            columns=["title", "thumbnail_url", "activities", "facilities", "park_name", "link"]
+            columns=[
+                "title",
+                "thumbnail_url",
+                "activities",
+                "facilities",
+                "park_name",
+                "link",
+                "current_conditions.lat",
+                "current_conditions.long",
+            ]
         )
 
         module_logger.info("Update triggered by WordPress post: %s", post_name)
@@ -137,6 +147,9 @@ def process(request):
             suffixes=("", "_wp"),
             indicator=True,
         )
+
+        #: convert to gdf so we can use geopandas stuff
+        merged_data = utils.convert_to_gdf(merged_data)
 
         #: Notify on any parks not present in the spatial data
         missing_geometries = merged_data.query("_merge == 'right_only'")
@@ -160,6 +173,18 @@ def process(request):
             lambda x: x["rendered"] if isinstance(x, dict) else x
         )
         valid_merged_data["link"] = valid_merged_data["link_wp"].fillna("")
+        valid_merged_data["lat"] = valid_merged_data["current_conditions.lat"].fillna("")
+        valid_merged_data["long"] = valid_merged_data["current_conditions.long"].fillna("")
+
+        geometry_copy = valid_merged_data[["SHAPE", "lat", "long"]].copy()
+        valid_geometry_copy = geometry_copy[(geometry_copy["lat"] != "") & (geometry_copy["long"] != "")].copy()
+        valid_geometry_copy["SHAPE"] = gpd.points_from_xy(
+            valid_geometry_copy["long"], valid_geometry_copy["lat"], crs="EPSG:4326"
+        ).to_crs(merged_data.crs)
+        valid_merged_data = valid_merged_data.drop(columns=["lat", "long"])
+
+        valid_merged_data.update(valid_geometry_copy.reindex(columns=["SHAPE"]))
+
         #: If a field name isn't in this list, it will remain in the feature service but be blank for all features.
         new_data_df = valid_merged_data.reindex(
             columns=[
