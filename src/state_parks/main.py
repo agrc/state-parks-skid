@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # * coding: utf8 *
 """
-Run the SKIDNAME script as a Cloud Run Job or console entry point.
+Run the state-parks script as a Cloud Run Job or console entry point.
 """
 
 import json
