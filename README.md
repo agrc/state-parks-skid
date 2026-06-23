@@ -6,7 +6,7 @@ A function that pulls data from the Utah State Parks WorkPress website and updat
 
 ## Overview
 
-This project defines two Cloud Run services:
+This project defines two Cloud Run services and an experience builder app that is embedded in the Utah State Parks website.
 
 ### `state-parks-skid`
 
@@ -15,6 +15,16 @@ This function uses palletjack to extract features from the WordPress REST API, t
 ### `webhook-trigger`
 
 This function received web hook calls from the WordPress plugin. It then schedules a task to run in a Cloud Tasks Queue five minutes into the future. It also checks for any pending tasks in the queue and cancels them. This way, if multiple webhooks are received in a short period of time, only one execution of the `state-parks-skid` will be triggered.
+
+## Links
+
+### Staging
+
+WordPress Site: <https://stateparks.stage.utah.gov/parks/>
+Experience Builder App: <https://utah.maps.arcgis.com/home/item.html?id=496208cbdb3d416ca36f2220bdceef5d/>
+Feature Service: <https://utah.maps.arcgis.com/home/item.html?id=45847ee7b6a04361b9dae4ee5340a4f1/>
+
+### Production
 
 ## Development Setup
 
