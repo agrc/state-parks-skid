@@ -9,6 +9,7 @@
     "Buildx",
     "cloudrun",
     "Codecov",
+    "cooldown",
     "finditer",
     "geodatabase",
     "getenv",
