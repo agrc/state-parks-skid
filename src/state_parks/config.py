@@ -29,11 +29,12 @@ SENDGRID_SETTINGS = {  #: Settings for SendGridHandler
 LOG_LEVEL = logging.DEBUG
 LOG_FILE_NAME = "log"
 
+# TODO: vary this based on environment (staging vs production)
 WORDPRESS_URL = "https://stateparks.stage.utah.gov"
 POSTS_ENDPOINT = "parks"
+
+# TODO: vary this based on environment (staging vs production)
 PARKS_FEATURE_LAYER_ITEMID = "45847ee7b6a04361b9dae4ee5340a4f1"
 
 #: Cloud Tasks queue path: projects/{project}/locations/{region}/queues/{queue_name}
 CLOUD_TASKS_QUEUE = f"projects/{HOST_NAME}/locations/us-central1/queues/state-parks-queue"
-#: URL of the worker Cloud Run service that processes a single post
-WORKER_URL = "https://state-parks-worker-<hash>-uc.a.run.app/process"
