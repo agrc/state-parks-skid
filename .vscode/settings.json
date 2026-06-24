@@ -10,6 +10,7 @@
     "cloudrun",
     "Codecov",
     "finditer",
+    "geodatabase",
     "getenv",
     "gethostname",
     "instafail",
@@ -29,6 +30,7 @@
     "psycopg",
     "pygsheets",
     "pyodbc",
+    "pyogrio",
     "pytest",
     "PYTHONUNBUFFERED",
     "rindex",
@@ -58,5 +60,6 @@
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true
-  }
+  },
+  "python-envs.defaultEnvManager": "ms-python.python:conda"
 }

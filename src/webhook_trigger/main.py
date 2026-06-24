@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import functions_framework
-from flask import jsonify, request
+from flask import jsonify
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import tasks_v2
 from google.protobuf import timestamp_pb2

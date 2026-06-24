@@ -14,12 +14,75 @@ from types import SimpleNamespace
 import arcgis
 import functions_framework
 import geopandas as gpd
+import pyogrio
 from flask import jsonify
-from palletjack import extract, load, transform, utils
+from palletjack import extract, load, utils
 
-from . import config, version
+from . import config
 
 module_logger = logging.getLogger(config.SKID_NAME)
+
+
+def _log_duplicate_outgoing_rows(dataframe):
+    """Warn if the outgoing dataset contains duplicate keys before loading."""
+
+    duplicate_keys = dataframe[dataframe["truncated_name"].duplicated(keep=False)]["truncated_name"].dropna().unique()
+    if len(duplicate_keys) > 0:
+        module_logger.warning("Outgoing dataset contains duplicate truncated_name values: %s", ", ".join(duplicate_keys))
+
+
+def _log_service_feature_count(loader, context):
+    """Log the current live feature count without breaking the main load flow."""
+
+    try:
+        count = loader.service.query(where="1=1", return_count_only=True)
+    except Exception:
+        module_logger.exception("Unable to query feature count %s", context)
+        return None
+
+    module_logger.info("Feature service row count %s: %d", context, count)
+    return count
+
+
+def _restore_service_from_backup(loader):
+    """Restore the feature service from palletjack's save_old backup.gdb artifact."""
+
+    backup_path = Path(loader.working_dir) / "backup.gdb"
+    if not backup_path.exists():
+        raise FileNotFoundError(f"Backup geodatabase not found at {backup_path}")
+
+    layers = pyogrio.list_layers(backup_path)
+    if len(layers) == 0:
+        raise ValueError(f"No layers found in backup geodatabase {backup_path}")
+
+    backup_layer = layers[0][0]
+    module_logger.info("Restoring feature service from %s layer %s", backup_path, backup_layer)
+    backup_data = gpd.read_file(backup_path, layer=backup_layer, engine="pyogrio")
+
+    return loader.truncate_and_load(backup_data)
+
+
+def _truncate_and_load_with_restore(loader, new_data_df):
+    """Load new data with a save_old backup and attempt restore if append fails."""
+
+    module_logger.info("Loading %d rows into the feature service", len(new_data_df))
+    _log_duplicate_outgoing_rows(new_data_df)
+    _log_service_feature_count(loader, "before load")
+
+    try:
+        loaded_count = loader.truncate_and_load(new_data_df, save_old=True)
+        _log_service_feature_count(loader, "after successful load")
+        return loaded_count
+    except Exception:
+        module_logger.exception("Primary truncate/load failed; attempting restore from save_old backup")
+        try:
+            restored_count = _restore_service_from_backup(loader)
+            module_logger.error("Restore succeeded with %d rows", restored_count)
+            _log_service_feature_count(loader, "after restore")
+        except Exception:
+            module_logger.exception("Restore failed after primary truncate/load failure")
+            _log_service_feature_count(loader, "after failed restore")
+        raise
 
 
 def _get_secrets():
@@ -133,13 +196,12 @@ def process(request):
 
         module_logger.info("Update triggered by WordPress post: %s", post_name)
 
-        existing_data = (
-            gis.content.get(config.PARKS_FEATURE_LAYER_ITEMID).layers[0].query(where="1=1", out_fields="*").sdf
-        )
-        existing_data["truncated_name"] = existing_data["truncated_name"].str.lower()
+        existing_data = gis.content.get(config.PARKS_FEATURE_LAYER_ITEMID).layers[0].query(where="1=1", out_fields="*").sdf
+        existing_data_for_merge = existing_data.copy()
+        existing_data_for_merge["truncated_name"] = existing_data_for_merge["truncated_name"].str.lower()
 
         #: We join on the park name with "State Park" stripped off and lowercased.
-        merged_data = existing_data.merge(
+        merged_data = existing_data_for_merge.merge(
             valid_posts,
             left_on="truncated_name",
             right_on="park_name",
@@ -207,7 +269,7 @@ def process(request):
         )
 
         loader = load.ServiceUpdater(gis, config.PARKS_FEATURE_LAYER_ITEMID, working_dir=tempdir_path)
-        features_loaded = loader.truncate_and_load(new_data_df)
+        features_loaded = _truncate_and_load_with_restore(loader, new_data_df)
 
     return jsonify({"status": "ok", "post_name": post_name, "features_loaded": features_loaded}), 200
 
