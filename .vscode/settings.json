@@ -5,6 +5,7 @@
     "agrc",
     "arcgis",
     "arcpy",
+    "boatramp",
     "Buildx",
     "cloudrun",
     "Codecov",
@@ -57,5 +58,5 @@
   "[python]": {
     "editor.defaultFormatter": "charliermarsh.ruff",
     "editor.formatOnSave": true
-  },
+  }
 }

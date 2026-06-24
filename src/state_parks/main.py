@@ -189,18 +189,20 @@ def process(request):
         new_data_df = valid_merged_data.reindex(
             columns=[
                 "OBJECTID",
+                "truncated_name",  # join key between wordpress and existing data
+                # these fields are preserved from the existing data
                 "label_state",
                 "boatramp",
                 "campground",
+                # these fields are overwritten with wordpress data
                 "link",
                 "thumbnail_url",
                 "activities",
                 "facilities",
-                "truncated_name",
                 "full_name",
                 "lat",
                 "long",
-                "SHAPE",
+                "SHAPE",  # overwritten by wordpress lat/long data if present
             ]
         )
 

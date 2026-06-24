@@ -24,6 +24,8 @@ LOG_LEVEL = logging.DEBUG
 
 #: Cloud Tasks queue path: projects/{project}/locations/{region}/queues/{queue_name}
 CLOUD_TASKS_QUEUE = f"projects/{HOST_NAME}/locations/us-central1/queues/cloud-tasks-queue-skid"
+
+# TODO: vary this based on environment (staging vs production)
 #: URL of the state-parks worker Cloud Run function
 WORKER_URL = "https://state-parks-skid-pn4shk4ynq-uc.a.run.app"
 
