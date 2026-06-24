@@ -13,12 +13,50 @@ from urllib.parse import urlencode
 
 import functions_framework
 from flask import jsonify, request
+from google.api_core.exceptions import AlreadyExists
 from google.cloud import tasks_v2
 from google.protobuf import timestamp_pb2
 
 from . import config
 
 module_logger = logging.getLogger(config.SKID_NAME)
+
+
+def _get_task_name():
+    """Build the singleton Cloud Tasks name used to de-duplicate refresh requests."""
+
+    return f"{config.CLOUD_TASKS_QUEUE}/tasks/{config.TASK_ID}"
+
+
+def _create_refresh_task(client, post_name, secrets):
+    """Create a singleton refresh task or return the existing task name if already queued."""
+
+    worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
+    schedule_time = timestamp_pb2.Timestamp()
+    schedule_time.FromDatetime(datetime.now(tz=timezone.utc) + timedelta(seconds=config.QUEUE_DELAY_SECONDS))
+    task_name = _get_task_name()
+    new_task = tasks_v2.Task(
+        name=task_name,
+        http_request=tasks_v2.HttpRequest(
+            http_method=tasks_v2.HttpMethod.POST,
+            url=worker_url,
+            oidc_token=tasks_v2.OidcToken(
+                service_account_email=secrets.get("SA_EMAIL"),
+                audience=config.WORKER_URL,
+            ),
+        ),
+        schedule_time=schedule_time,
+    )
+
+    try:
+        created = client.create_task(parent=config.CLOUD_TASKS_QUEUE, task=new_task)
+        module_logger.info("Created task %s for post_name '%s'", created.name, post_name)
+        return created.name, True
+    except AlreadyExists:
+        module_logger.info(
+            "Task %s already exists; coalescing duplicate request for post_name '%s'", task_name, post_name
+        )
+        return task_name, False
 
 
 def _get_secrets():
@@ -73,30 +111,7 @@ def trigger(request):
 
     client = tasks_v2.CloudTasksClient()
 
-    #: Delete all existing tasks in the queue before adding a new one
-    existing_tasks = client.list_tasks(parent=config.CLOUD_TASKS_QUEUE)
-    for task in existing_tasks:
-        client.delete_task(name=task.name)
-        module_logger.info("Deleted existing task: %s", task.name)
+    task_name, created = _create_refresh_task(client, post_name, secrets)
+    status = "queued" if created else "already_queued"
 
-    #: Build the worker URL with post_name as a query parameter
-    worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
-    schedule_time = timestamp_pb2.Timestamp()
-    schedule_time.FromDatetime(datetime.now(tz=timezone.utc) + timedelta(seconds=config.QUEUE_DELAY_SECONDS))
-    new_task = tasks_v2.Task(
-        http_request=tasks_v2.HttpRequest(
-            http_method=tasks_v2.HttpMethod.POST,
-            url=worker_url,
-            oidc_token=tasks_v2.OidcToken(
-                service_account_email=secrets.get("SA_EMAIL"),
-                audience=config.WORKER_URL,
-            ),
-            # body=payload,
-        ),
-        schedule_time=schedule_time,
-    )
-
-    created = client.create_task(parent=config.CLOUD_TASKS_QUEUE, task=new_task)
-    module_logger.info("Created task %s for post_name '%s'", created.name, post_name)
-
-    return jsonify({"status": "ok", "task": created.name}), 200
+    return jsonify({"status": "ok", "task": task_name, "enqueue_status": status}), 200

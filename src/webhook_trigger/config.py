@@ -30,3 +30,4 @@ CLOUD_TASKS_QUEUE = f"projects/{HOST_NAME}/locations/us-central1/queues/cloud-ta
 WORKER_URL = "https://state-parks-skid-pn4shk4ynq-uc.a.run.app"
 
 QUEUE_DELAY_SECONDS = 5 * 60
+TASK_ID = "state-parks-refresh"
