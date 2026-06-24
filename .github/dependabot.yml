@@ -24,7 +24,9 @@ updates:
         - ugrc-*
         - agrc-*
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/deploy
     schedule:
       interval: monthly
     groups:
