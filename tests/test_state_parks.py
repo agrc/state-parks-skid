@@ -1,4 +1,3 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 import geopandas as gpd
@@ -43,7 +42,11 @@ def test_get_park_name_gets_name_without_state_park_museum_suffix():
 
 
 def test_truncate_and_load_with_restore_retries_with_backup(mocker, tmp_path):
-    backup_data = gpd.GeoDataFrame({"truncated_name": ["antelope island"]})
+    backup_data = gpd.GeoDataFrame(
+        {"truncated_name": ["antelope island"]},
+        geometry=gpd.points_from_xy([-111.5], [40.7]),
+        crs="EPSG:4326",
+    )
     new_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"]})
     loader = mocker.Mock()
     loader.working_dir = tmp_path
@@ -56,10 +59,40 @@ def test_truncate_and_load_with_restore_retries_with_backup(mocker, tmp_path):
     with pytest.raises(RuntimeError, match="append failed"):
         main._truncate_and_load_with_restore(loader, new_data_df)
 
+    restored_backup_data = loader.truncate_and_load.call_args_list[1].args[0]
+
     assert loader.truncate_and_load.call_args_list == [
         mocker.call(new_data_df, save_old=True),
-        mocker.call(backup_data),
+        mocker.call(restored_backup_data),
     ]
+    assert "SHAPE" in restored_backup_data.columns
+    assert "geometry" not in restored_backup_data.columns
+    assert restored_backup_data.geometry.name == "SHAPE"
+
+
+def test_truncate_and_load_with_restore_logs_failure_details(mocker, tmp_path):
+    backup_data = gpd.GeoDataFrame(
+        {"truncated_name": ["antelope island"]},
+        geometry=gpd.points_from_xy([-111.5], [40.7]),
+        crs="EPSG:4326",
+    )
+    new_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"]})
+    primary_error = RuntimeError("append failed")
+    loader = mocker.Mock()
+    loader.working_dir = tmp_path
+    loader.truncate_and_load.side_effect = [primary_error, 3]
+    exception_logger = mocker.patch.object(main.module_logger, "exception")
+
+    mocker.patch("state_parks.main.pyogrio.list_layers", return_value=[["parks_backup", "Point"]])
+    mocker.patch("state_parks.main.gpd.read_file", return_value=backup_data)
+    mocker.patch("pathlib.Path.exists", return_value=True)
+
+    with pytest.raises(RuntimeError, match="append failed"):
+        main._truncate_and_load_with_restore(loader, new_data_df)
+
+    exception_logger.assert_any_call(
+        "Primary truncate/load failed (%s); attempting restore from save_old backup", primary_error
+    )
 
 
 def test_restore_service_from_backup_errors_when_backup_missing(tmp_path, mocker):
@@ -126,7 +159,9 @@ def test_trigger_returns_already_queued_status_for_duplicate_task(mocker):
         args={"api_key": "secret"},
         get_json=lambda: {"post": {"post_name": "antelope-island"}},
     )
-    mocker.patch("webhook_trigger.main._get_secrets", return_value={"API_KEY": "secret", "SA_EMAIL": "worker@example.com"})
+    mocker.patch(
+        "webhook_trigger.main._get_secrets", return_value={"API_KEY": "secret", "SA_EMAIL": "worker@example.com"}
+    )
     mocker.patch("webhook_trigger.main.tasks_v2.CloudTasksClient")
     mocker.patch("webhook_trigger.main._create_refresh_task", return_value=(webhook_main._get_task_name(), False))
 
