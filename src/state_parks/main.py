@@ -192,6 +192,7 @@ def process(request):
         #: This controls which fields we're pulling from WordPress
         valid_posts = valid_posts.reindex(
             columns=[
+                "id",
                 "title",
                 "thumbnail_url",
                 "activities",
@@ -205,7 +206,9 @@ def process(request):
 
         module_logger.info("Update triggered by WordPress post: %s", post_name)
 
-        existing_data = gis.content.get(config.PARKS_FEATURE_LAYER_ITEMID).layers[0].query(where="1=1", out_fields="*").sdf
+        existing_data = (
+            gis.content.get(config.PARKS_FEATURE_LAYER_ITEMID).layers[0].query(where="1=1", out_fields="*").sdf
+        )
         existing_data_for_merge = existing_data.copy()
         existing_data_for_merge["truncated_name"] = existing_data_for_merge["truncated_name"].str.lower()
 
@@ -226,10 +229,28 @@ def process(request):
         missing_geometries = merged_data.query("_merge == 'right_only'")
         if len(missing_geometries) > 0:
             module_logger.warning(
-                "The following %d records from WordPress are missing geometry and will not be included in the update",
+                "The following %d records from WordPress are missing geometry from AGOL and will not be included in the update",
                 len(missing_geometries),
             )
-            module_logger.warning(", ".join(list(missing_geometries["park_name"])))
+            module_logger.warning(
+                ", ".join(
+                    f"{row.park_name} ({row.id})"
+                    for row in missing_geometries[["park_name", "id"]].itertuples(index=False)
+                )
+            )
+
+        missing_wp_parks = merged_data.query("_merge == 'left_only'")
+        if len(missing_wp_parks) > 0:
+            module_logger.warning(
+                "The following %d records from AGOL are missing in WordPress and will not be updated",
+                len(missing_wp_parks),
+            )
+            module_logger.warning(
+                ", ".join(
+                    f"{row.truncated_name} ({row.OBJECTID})"
+                    for row in missing_wp_parks[["truncated_name", "OBJECTID"]].itertuples(index=False)
+                )
+            )
 
         #: overwrite all parks, not just the ones we have data for. This will remove any data that was removed from WP
         valid_merged_data = merged_data.query("_merge != 'right_only'").copy()
