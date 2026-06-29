@@ -69,6 +69,10 @@ def _restore_service_from_backup(loader):
     module_logger.info("Restoring feature service from %s layer %s", backup_path, backup_layer)
     backup_data = gpd.read_file(backup_path, layer=backup_layer, engine="pyogrio")
 
+    # palletjack validates feature-layer geometry using the ArcGIS-style SHAPE field name.
+    if "geometry" in backup_data.columns and "SHAPE" not in backup_data.columns:
+        backup_data = backup_data.rename(columns={"geometry": "SHAPE"}).set_geometry("SHAPE")
+
     return loader.truncate_and_load(backup_data)
 
 
@@ -82,15 +86,18 @@ def _truncate_and_load_with_restore(loader, new_data_df):
     try:
         loaded_count = loader.truncate_and_load(new_data_df, save_old=True)
         _log_service_feature_count(loader, "after successful load")
+
         return loaded_count
-    except Exception:
-        module_logger.exception("Primary truncate/load failed; attempting restore from save_old backup")
+    except Exception as exc:
+        module_logger.exception(
+            "Primary truncate/load failed (%s); attempting restore from save_old backup", exc
+        )
         try:
             restored_count = _restore_service_from_backup(loader)
             module_logger.error("Restore succeeded with %d rows", restored_count)
             _log_service_feature_count(loader, "after restore")
-        except Exception:
-            module_logger.exception("Restore failed after primary truncate/load failure")
+        except Exception as restore_exc:
+            module_logger.exception("Restore failed after primary truncate/load failure (%s)", restore_exc)
             _log_service_feature_count(loader, "after failed restore")
         raise
 
