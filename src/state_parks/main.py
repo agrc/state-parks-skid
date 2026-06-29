@@ -6,8 +6,10 @@ Run the state-parks script as a Cloud Run Job or console entry point.
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
+from pprint import pprint
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 
@@ -23,12 +25,20 @@ from . import config
 module_logger = logging.getLogger(config.SKID_NAME)
 
 
+def _is_running_in_cloud_run():
+    """Return True when executing inside Cloud Run."""
+
+    return bool(os.environ.get("K_SERVICE"))
+
+
 def _log_duplicate_outgoing_rows(dataframe):
     """Warn if the outgoing dataset contains duplicate keys before loading."""
 
     duplicate_keys = dataframe[dataframe["truncated_name"].duplicated(keep=False)]["truncated_name"].dropna().unique()
     if len(duplicate_keys) > 0:
-        module_logger.warning("Outgoing dataset contains duplicate truncated_name values: %s", ", ".join(duplicate_keys))
+        module_logger.warning(
+            "Outgoing dataset contains duplicate truncated_name values: %s", ", ".join(duplicate_keys)
+        )
 
 
 def _log_service_feature_count(loader, context):
@@ -110,26 +120,25 @@ def _get_secrets():
 
 
 def _initialize():
-    """A helper method to set up logging"""
+    """Configure local CLI logging without adding duplicate Cloud Run handlers."""
+
+    if not _is_running_in_cloud_run():
+        cli_handler = logging.StreamHandler(sys.stdout)
+        cli_handler.setLevel(logging.INFO)
+        cli_handler.setFormatter(
+            logging.Formatter(
+                fmt="%(levelname)-7s %(asctime)s %(name)15s:%(lineno)5s %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
+        logging.basicConfig(level=logging.INFO, handlers=[cli_handler])
 
     skid_logger = logging.getLogger(config.SKID_NAME)
     skid_logger.setLevel(config.LOG_LEVEL)
     palletjack_logger = logging.getLogger("palletjack")
     palletjack_logger.setLevel(config.LOG_LEVEL)
 
-    cli_handler = logging.StreamHandler(sys.stdout)
-    cli_handler.setLevel(config.LOG_LEVEL)
-    formatter = logging.Formatter(
-        fmt="%(levelname)-7s %(asctime)s %(name)15s:%(lineno)5s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
-    cli_handler.setFormatter(formatter)
-
-    skid_logger.addHandler(cli_handler)
-    palletjack_logger.addHandler(cli_handler)
-
     #: Log any warnings at logging.WARNING
-    #: Put after everything else to prevent creating a duplicate, default formatter
-    #: (all log messages were duplicated if put at beginning)
     logging.captureWarnings(True)
 
 
@@ -271,7 +280,17 @@ def process(request):
         loader = load.ServiceUpdater(gis, config.PARKS_FEATURE_LAYER_ITEMID, working_dir=tempdir_path)
         features_loaded = _truncate_and_load_with_restore(loader, new_data_df)
 
-    return jsonify({"status": "ok", "post_name": post_name, "features_loaded": features_loaded}), 200
+    return_object = {"status": "ok", "post_name": post_name, "features_loaded": features_loaded}
+
+    try:
+        return jsonify(return_object), 200
+    except RuntimeError as e:
+        # If we are working outside of the Flask application context, we cannot return a JSON response.
+        # Instead, we print the return object to the console for debugging purposes.
+        if "Working outside of application context" in str(e):
+            pprint(return_object)
+        else:
+            raise
 
 
 def _get_park_name(title_from_wordpress):
