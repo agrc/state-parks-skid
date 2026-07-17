@@ -90,7 +90,10 @@ def trigger(request):
 
     URL parameters:
         api_key (str): Must match the API_KEY value in secrets.json.
-        post_name (str): The WordPress post slug/name to process.
+
+    JSON body:
+        post (object): Object containing the post details.
+            post_name (str): The WordPress post slug/name to process.
 
     Returns:
         JSON response with HTTP 200 on success, 401 on auth failure, or 400 on missing parameters.
@@ -104,6 +107,10 @@ def trigger(request):
         return jsonify({"error": "Invalid Trigger API Key"}), 401
 
     payload = request.get_json()
+    if not payload or "post" not in payload:
+        module_logger.error("Missing required parameter: post")
+        return jsonify({"error": "Missing required parameter: post"}), 400
+    
     post_name = payload["post"].get("post_name")
     if not post_name:
         module_logger.error("Missing required parameter: post_name")
