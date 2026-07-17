@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import arcgis
 import functions_framework
 import geopandas as gpd
-import pyogrio
+import pandas as pd
 from flask import jsonify
 from palletjack import extract, load, utils
 
@@ -54,52 +54,89 @@ def _log_service_feature_count(loader, context):
     return count
 
 
-def _restore_service_from_backup(loader):
-    """Restore the feature service from palletjack's save_old backup.gdb artifact."""
+def _update_and_add(loader, update_data_df, add_data_df):
+    """Update existing parks and add new parks without truncating the service."""
 
-    backup_path = Path(loader.working_dir) / "backup.gdb"
-    if not backup_path.exists():
-        raise FileNotFoundError(f"Backup geodatabase not found at {backup_path}")
+    _log_service_feature_count(loader, "before synchronization")
+    _log_duplicate_outgoing_rows(update_data_df)
+    _log_duplicate_outgoing_rows(add_data_df)
 
-    layers = pyogrio.list_layers(backup_path)
-    if len(layers) == 0:
-        raise ValueError(f"No layers found in backup geodatabase {backup_path}")
-
-    backup_layer = layers[0][0]
-    module_logger.info("Restoring feature service from %s layer %s", backup_path, backup_layer)
-    backup_data = gpd.read_file(backup_path, layer=backup_layer, engine="pyogrio")
-
-    # palletjack validates feature-layer geometry using the ArcGIS-style SHAPE field name.
-    if "geometry" in backup_data.columns and "SHAPE" not in backup_data.columns:
-        backup_data = backup_data.rename(columns={"geometry": "SHAPE"}).set_geometry("SHAPE")
-
-    return loader.truncate_and_load(backup_data)
-
-
-def _truncate_and_load_with_restore(loader, new_data_df):
-    """Load new data with a save_old backup and attempt restore if append fails."""
-
-    module_logger.info("Loading %d rows into the feature service", len(new_data_df))
-    _log_duplicate_outgoing_rows(new_data_df)
-    _log_service_feature_count(loader, "before load")
-
-    try:
-        loaded_count = loader.truncate_and_load(new_data_df, save_old=True)
-        _log_service_feature_count(loader, "after successful load")
-
-        return loaded_count
-    except Exception as exc:
-        module_logger.exception(
-            "Primary truncate/load failed (%s); attempting restore from save_old backup", exc
-        )
+    updated_count = 0
+    if not update_data_df.empty:
+        module_logger.info("Updating %d existing rows in the feature service", len(update_data_df))
         try:
-            restored_count = _restore_service_from_backup(loader)
-            module_logger.error("Restore succeeded with %d rows", restored_count)
-            _log_service_feature_count(loader, "after restore")
-        except Exception as restore_exc:
-            module_logger.exception("Restore failed after primary truncate/load failure (%s)", restore_exc)
-            _log_service_feature_count(loader, "after failed restore")
-        raise
+            updated_count = loader.update(update_data_df, update_geometry=True)
+        except Exception:
+            module_logger.exception("Updating existing feature service rows failed")
+            raise
+
+    added_count = 0
+    if not add_data_df.empty:
+        module_logger.info("Adding %d new rows to the feature service", len(add_data_df))
+        try:
+            added_count = loader.add(add_data_df)
+        except Exception:
+            module_logger.exception("Adding new feature service rows failed")
+            raise
+
+    _log_service_feature_count(loader, "after successful synchronization")
+    return updated_count + added_count
+
+
+def _build_sync_dataframes(merged_data):
+    """Build update, add, and skipped-new-park dataframes from the AGOL/WordPress merge."""
+
+    synchronized_data = merged_data.copy()
+    synchronized_data["activities"] = (
+        synchronized_data["activities_wp"].fillna("").apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
+    )
+    synchronized_data["facilities"] = (
+        synchronized_data["facilities_wp"].fillna("").apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
+    )
+    synchronized_data["thumbnail_url"] = synchronized_data["thumbnail_url_wp"].fillna("")
+    synchronized_data["full_name"] = synchronized_data["title"].apply(
+        lambda x: x["rendered"] if isinstance(x, dict) else x
+    )
+    synchronized_data["link"] = synchronized_data["link_wp"].fillna("")
+    synchronized_data["lat"] = pd.to_numeric(synchronized_data["current_conditions.lat"], errors="coerce")
+    synchronized_data["long"] = pd.to_numeric(synchronized_data["current_conditions.long"], errors="coerce")
+
+    geometry_copy = synchronized_data[["SHAPE", "lat", "long"]].copy()
+    geometry_copy["lat"] = pd.to_numeric(geometry_copy["lat"], errors="coerce")
+    geometry_copy["long"] = pd.to_numeric(geometry_copy["long"], errors="coerce")
+    valid_geometry_copy = geometry_copy[
+        geometry_copy["lat"].between(-90, 90) & geometry_copy["long"].between(-180, 180)
+    ].copy()
+    valid_geometry_copy["SHAPE"] = gpd.points_from_xy(
+        valid_geometry_copy["long"], valid_geometry_copy["lat"], crs="EPSG:4326"
+    ).to_crs(merged_data.crs)
+    synchronized_data.update(valid_geometry_copy.reindex(columns=["SHAPE"]))
+
+    output_columns = [
+        "OBJECTID",
+        "truncated_name",
+        "label_state",
+        "boatramp",
+        "campground",
+        "link",
+        "thumbnail_url",
+        "activities",
+        "facilities",
+        "full_name",
+        "lat",
+        "long",
+        "SHAPE",
+    ]
+    update_data_df = synchronized_data.query("_merge != 'right_only'").reindex(columns=output_columns)
+
+    add_candidates = synchronized_data.query("_merge == 'right_only'").copy()
+    add_indexes = add_candidates.index.intersection(valid_geometry_copy.index)
+    add_data_df = add_candidates.loc[add_indexes].reindex(
+        columns=[column for column in output_columns if column != "OBJECTID"]
+    )
+    skipped_adds = add_candidates.loc[~add_candidates.index.isin(add_indexes)]
+
+    return update_data_df, add_data_df, skipped_adds
 
 
 def _get_secrets():
@@ -259,54 +296,20 @@ def process(request):
                 )
             )
 
-        #: overwrite all parks, not just the ones we have data for. This will remove any data that was removed from WP
-        valid_merged_data = merged_data.query("_merge != 'right_only'").copy()
-        valid_merged_data["activities"] = (
-            valid_merged_data["activities_wp"].fillna("").apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
-        )
-        valid_merged_data["facilities"] = (
-            valid_merged_data["facilities_wp"].fillna("").apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
-        )
-        valid_merged_data["thumbnail_url"] = valid_merged_data["thumbnail_url_wp"].fillna("")
-        valid_merged_data["full_name"] = valid_merged_data["title"].apply(
-            lambda x: x["rendered"] if isinstance(x, dict) else x
-        )
-        valid_merged_data["link"] = valid_merged_data["link_wp"].fillna("")
-        valid_merged_data["lat"] = valid_merged_data["current_conditions.lat"].fillna("")
-        valid_merged_data["long"] = valid_merged_data["current_conditions.long"].fillna("")
-
-        geometry_copy = valid_merged_data[["SHAPE", "lat", "long"]].copy()
-        valid_geometry_copy = geometry_copy[(geometry_copy["lat"] != "") & (geometry_copy["long"] != "")].copy()
-        valid_geometry_copy["SHAPE"] = gpd.points_from_xy(
-            valid_geometry_copy["long"], valid_geometry_copy["lat"], crs="EPSG:4326"
-        ).to_crs(merged_data.crs)
-        valid_merged_data = valid_merged_data.drop(columns=["lat", "long"])
-
-        valid_merged_data.update(valid_geometry_copy.reindex(columns=["SHAPE"]))
-
-        #: If a field name isn't in this list, it will remain in the feature service but be blank for all features.
-        new_data_df = valid_merged_data.reindex(
-            columns=[
-                "OBJECTID",
-                "truncated_name",  # join key between wordpress and existing data
-                # these fields are preserved from the existing data
-                "label_state",
-                "boatramp",
-                "campground",
-                # these fields are overwritten with wordpress data
-                "link",
-                "thumbnail_url",
-                "activities",
-                "facilities",
-                "full_name",
-                "lat",
-                "long",
-                "SHAPE",  # overwritten by wordpress lat/long data if present
-            ]
-        )
+        update_data_df, add_data_df, skipped_adds = _build_sync_dataframes(merged_data)
+        if len(skipped_adds) > 0:
+            module_logger.warning(
+                "The following %d records from WordPress are missing valid coordinates and will not be added",
+                len(skipped_adds),
+            )
+            module_logger.warning(
+                ", ".join(
+                    f"{row.park_name} ({row.id})" for row in skipped_adds[["park_name", "id"]].itertuples(index=False)
+                )
+            )
 
         loader = load.ServiceUpdater(gis, config.PARKS_FEATURE_LAYER_ITEMID, working_dir=tempdir_path)
-        features_loaded = _truncate_and_load_with_restore(loader, new_data_df)
+        features_loaded = _update_and_add(loader, update_data_df, add_data_df)
 
     return_object = {"status": "ok", "post_name": post_name, "features_loaded": features_loaded}
 

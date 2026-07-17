@@ -14,7 +14,7 @@ This project defines two Cloud Run services and an experience builder app that i
 
 ### `state-parks-skid`
 
-This function uses palletjack to extract features from the WordPress REST API, transform the data to match the feature service schema, and truncate/load it into ArcGIS Online.
+This function uses palletjack to extract features from the WordPress REST API, transform the data to match the feature service schema, update existing parks in place, and add new parks with valid coordinates without truncating the ArcGIS Online feature service.
 
 ### `webhook-trigger`
 

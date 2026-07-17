@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import geopandas as gpd
+import pandas as pd
 import pytest
 from flask import Flask
 from google.api_core.exceptions import AlreadyExists
@@ -41,66 +42,114 @@ def test_get_park_name_gets_name_without_state_park_museum_suffix():
     assert park_name == "Edge of the Cedars"
 
 
-def test_truncate_and_load_with_restore_retries_with_backup(mocker, tmp_path):
-    backup_data = gpd.GeoDataFrame(
-        {"truncated_name": ["antelope island"]},
-        geometry=gpd.points_from_xy([-111.5], [40.7]),
+def test_build_sync_dataframes_updates_adds_and_skips_expected_parks():
+    merged_data = gpd.GeoDataFrame(
+        {
+            "OBJECTID": [1, 2, None, None],
+            "truncated_name": ["existing", "legacy", None, None],
+            "label_state": ["UT", "UT", None, None],
+            "boatramp": [False, False, None, None],
+            "campground": [True, True, None, None],
+            "activities_wp": [["Hiking"], None, ["Boating"], ["Fishing"]],
+            "facilities_wp": [["Restroom"], None, ["Marina"], ["Dock"]],
+            "thumbnail_url_wp": ["existing.jpg", None, "new.jpg", "skipped.jpg"],
+            "title": [
+                {"rendered": "Existing State Park"},
+                None,
+                {"rendered": "New State Park"},
+                {"rendered": "Skipped State Park"},
+            ],
+            "link_wp": ["/existing", None, "/new", "/skipped"],
+            "current_conditions.lat": [40.0, None, 41.0, None],
+            "current_conditions.long": [-111.0, None, -112.0, None],
+            "park_name": ["existing", None, "new", "skipped"],
+            "id": [101, None, 102, 103],
+            "_merge": ["both", "left_only", "right_only", "right_only"],
+        },
+        geometry=gpd.GeoSeries(
+            gpd.points_from_xy([-110.0, -109.0, None, None], [40.0, 41.0, None, None]), crs="EPSG:4326"
+        ),
         crs="EPSG:4326",
-    )
-    new_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"]})
+    ).rename_geometry("SHAPE")
+
+    update_data_df, add_data_df, skipped_adds = main._build_sync_dataframes(merged_data)
+
+    assert set(update_data_df["OBJECTID"]) == {1, 2}
+    assert "OBJECTID" not in add_data_df.columns
+    assert add_data_df["full_name"].tolist() == ["New State Park"]
+    assert pd.api.types.is_float_dtype(update_data_df["lat"])
+    assert pd.api.types.is_float_dtype(update_data_df["long"])
+    assert pd.api.types.is_float_dtype(add_data_df["lat"])
+    assert pd.api.types.is_float_dtype(add_data_df["long"])
+    assert add_data_df.iloc[0].SHAPE.x == -112.0
+    assert add_data_df.iloc[0].SHAPE.y == 41.0
+    assert skipped_adds["park_name"].tolist() == ["skipped"]
+
+    existing_row = update_data_df.set_index("truncated_name").loc["existing"]
+    assert existing_row["lat"] == 40.0
+    assert existing_row["long"] == -111.0
+    assert existing_row.SHAPE.x == -111.0
+    assert existing_row.SHAPE.y == 40.0
+
+    legacy_row = update_data_df.set_index("truncated_name").loc["legacy"]
+    assert pd.isna(legacy_row["lat"])
+    assert pd.isna(legacy_row["long"])
+    assert legacy_row.SHAPE.x == -109.0
+    assert legacy_row.SHAPE.y == 41.0
+    assert legacy_row["link"] == ""
+    assert legacy_row["activities"] == ""
+    assert legacy_row["facilities"] == ""
+
+
+def test_update_and_add_updates_existing_rows_and_adds_new_rows(mocker):
+    update_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"], "OBJECTID": [1]})
+    add_data_df = gpd.GeoDataFrame({"truncated_name": ["antelope island"]})
     loader = mocker.Mock()
-    loader.working_dir = tmp_path
-    loader.truncate_and_load.side_effect = [RuntimeError("append failed"), 3]
+    loader.update.return_value = 1
+    loader.add.return_value = 1
+    loader.service.query.side_effect = [5, 6]
 
-    mocker.patch("state_parks.main.pyogrio.list_layers", return_value=[["parks_backup", "Point"]])
-    mocker.patch("state_parks.main.gpd.read_file", return_value=backup_data)
-    mocker.patch("pathlib.Path.exists", return_value=True)
+    loaded_count = main._update_and_add(loader, update_data_df, add_data_df)
 
-    with pytest.raises(RuntimeError, match="append failed"):
-        main._truncate_and_load_with_restore(loader, new_data_df)
-
-    restored_backup_data = loader.truncate_and_load.call_args_list[1].args[0]
-
-    assert loader.truncate_and_load.call_args_list == [
-        mocker.call(new_data_df, save_old=True),
-        mocker.call(restored_backup_data),
-    ]
-    assert "SHAPE" in restored_backup_data.columns
-    assert "geometry" not in restored_backup_data.columns
-    assert restored_backup_data.geometry.name == "SHAPE"
+    assert loaded_count == 2
+    loader.update.assert_called_once_with(update_data_df, update_geometry=True)
+    loader.add.assert_called_once_with(add_data_df)
+    assert loader.truncate_and_load.call_count == 0
 
 
-def test_truncate_and_load_with_restore_logs_failure_details(mocker, tmp_path):
-    backup_data = gpd.GeoDataFrame(
-        {"truncated_name": ["antelope island"]},
-        geometry=gpd.points_from_xy([-111.5], [40.7]),
-        crs="EPSG:4326",
-    )
-    new_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"]})
-    primary_error = RuntimeError("append failed")
+def test_update_and_add_propagates_update_failure(mocker):
+    update_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"], "OBJECTID": [1]})
+    add_data_df = gpd.GeoDataFrame({"truncated_name": ["antelope island"]})
+    update_error = RuntimeError("update failed")
     loader = mocker.Mock()
-    loader.working_dir = tmp_path
-    loader.truncate_and_load.side_effect = [primary_error, 3]
+    loader.update.side_effect = update_error
+    exception_logger = mocker.patch.object(main.module_logger, "exception")
+    loader.service.query.return_value = 5
+
+    with pytest.raises(RuntimeError, match="update failed"):
+        main._update_and_add(loader, update_data_df, add_data_df)
+
+    exception_logger.assert_called_once_with("Updating existing feature service rows failed")
+    loader.add.assert_not_called()
+    assert loader.truncate_and_load.call_count == 0
+
+
+def test_update_and_add_propagates_add_failure_after_updates(mocker):
+    update_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"], "OBJECTID": [1]})
+    add_data_df = gpd.GeoDataFrame({"truncated_name": ["antelope island"]})
+    add_error = RuntimeError("add failed")
+    loader = mocker.Mock()
+    loader.update.return_value = 1
+    loader.add.side_effect = add_error
+    loader.service.query.return_value = 5
     exception_logger = mocker.patch.object(main.module_logger, "exception")
 
-    mocker.patch("state_parks.main.pyogrio.list_layers", return_value=[["parks_backup", "Point"]])
-    mocker.patch("state_parks.main.gpd.read_file", return_value=backup_data)
-    mocker.patch("pathlib.Path.exists", return_value=True)
+    with pytest.raises(RuntimeError, match="add failed"):
+        main._update_and_add(loader, update_data_df, add_data_df)
 
-    with pytest.raises(RuntimeError, match="append failed"):
-        main._truncate_and_load_with_restore(loader, new_data_df)
-
-    exception_logger.assert_any_call(
-        "Primary truncate/load failed (%s); attempting restore from save_old backup", primary_error
-    )
-
-
-def test_restore_service_from_backup_errors_when_backup_missing(tmp_path, mocker):
-    loader = mocker.Mock()
-    loader.working_dir = tmp_path
-
-    with pytest.raises(FileNotFoundError):
-        main._restore_service_from_backup(loader)
+    loader.update.assert_called_once_with(update_data_df, update_geometry=True)
+    exception_logger.assert_called_once_with("Adding new feature service rows failed")
+    assert loader.truncate_and_load.call_count == 0
 
 
 def test_log_duplicate_outgoing_rows_warns_for_duplicate_keys(mocker):
@@ -124,22 +173,24 @@ def test_log_service_feature_count_logs_current_count(mocker):
     logger.assert_any_call("Feature service row count %s: %d", "after successful load", 42)
 
 
-def test_truncate_and_load_with_restore_logs_counts_on_success(mocker):
-    new_data_df = gpd.GeoDataFrame({"truncated_name": ["dead horse point"]})
+def test_update_and_add_skips_empty_batches_and_logs_counts(mocker):
+    update_data_df = gpd.GeoDataFrame({"truncated_name": []})
+    add_data_df = gpd.GeoDataFrame({"truncated_name": []})
     loader = mocker.Mock()
-    loader.truncate_and_load.return_value = 1
-    loader.service.query.side_effect = [5, 1]
+    loader.service.query.side_effect = [5, 5]
     info_logger = mocker.patch.object(main.module_logger, "info")
 
-    loaded_count = main._truncate_and_load_with_restore(loader, new_data_df)
+    loaded_count = main._update_and_add(loader, update_data_df, add_data_df)
 
-    assert loaded_count == 1
+    assert loaded_count == 0
+    loader.update.assert_not_called()
+    loader.add.assert_not_called()
     assert loader.service.query.call_args_list == [
         mocker.call(where="1=1", return_count_only=True),
         mocker.call(where="1=1", return_count_only=True),
     ]
-    info_logger.assert_any_call("Feature service row count %s: %d", "before load", 5)
-    info_logger.assert_any_call("Feature service row count %s: %d", "after successful load", 1)
+    info_logger.assert_any_call("Feature service row count %s: %d", "before synchronization", 5)
+    info_logger.assert_any_call("Feature service row count %s: %d", "after successful synchronization", 5)
 
 
 def test_create_refresh_task_returns_existing_task_for_duplicate_request(mocker):
