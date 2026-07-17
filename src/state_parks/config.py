@@ -35,8 +35,7 @@ POSTS_ENDPOINT = "parks"
 ENVIRONMENTS = {
     "staging": {
         "wordpress_url": "https://stateparks.stage.utah.gov",
-        # TODO: Update this to point to a staging parks feature layer after one is created
-        "parks_feature_layer_itemid": "45847ee7b6a04361b9dae4ee5340a4f1",
+        "parks_feature_layer_itemid": "f48539a42c714223ad67e0e6727051cf",
     },
     "production": {
         "wordpress_url": "https://stateparks.utah.gov",
