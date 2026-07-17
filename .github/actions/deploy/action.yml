@@ -10,9 +10,6 @@ inputs:
   service_account_email:
     description: "The service account email"
     required: true
-  storage_bucket:
-    description: "The GCP storage bucket"
-    required: true
 
 runs:
   using: composite
@@ -36,7 +33,6 @@ runs:
         service_account: cloud-function-sa@${{ inputs.project_id }}.iam.gserviceaccount.com
         memory: 1024M
         service_timeout: 9m
-        environment_variables: STORAGE_BUCKET=${{ inputs.storage_bucket }}
         secrets: |
           /secrets/app/secrets.json=${{ inputs.project_id }}/skid-secrets
         max_instance_count: 1
@@ -53,7 +49,6 @@ runs:
         service_account: cloud-function-sa@${{ inputs.project_id }}.iam.gserviceaccount.com
         memory: 1024M
         service_timeout: 9m
-        environment_variables: STORAGE_BUCKET=${{ inputs.storage_bucket }}
         secrets: |
           /secrets/app/secrets.json=${{ inputs.project_id }}/skid-secrets
         max_instance_count: 1

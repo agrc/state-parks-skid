@@ -2,7 +2,7 @@
 
 [![Push Events](https://github.com/agrc/state-parks-skid/actions/workflows/push.yml/badge.svg)](https://github.com/agrc/state-parks-skid/actions/workflows/push.yml)
 
-A function that pulls data from the Utah State Parks WorkPress website and updates a feature service in ArcGIS Online. The skid is automatically run, via a [WP Webhook plugin](https://wp-webhooks.com/), any time a post is edited.
+A function that pulls data from the Utah State Parks WordPress website and updates a feature service in ArcGIS Online. The skid is automatically run, via a [WP Webhook plugin](https://wp-webhooks.com/), any time a post is edited.
 
 Contacts:
 
