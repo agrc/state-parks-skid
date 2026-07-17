@@ -3,6 +3,7 @@ config.py: Configuration values. Secrets to be handled with Secrets Manager
 """
 
 import logging
+import os
 import socket
 import urllib.request
 
@@ -29,12 +30,28 @@ SENDGRID_SETTINGS = {  #: Settings for SendGridHandler
 LOG_LEVEL = logging.DEBUG
 LOG_FILE_NAME = "log"
 
-# TODO: vary this based on environment (staging vs production)
-WORDPRESS_URL = "https://stateparks.stage.utah.gov"
 POSTS_ENDPOINT = "parks"
 
-# TODO: vary this based on environment (staging vs production)
-PARKS_FEATURE_LAYER_ITEMID = "45847ee7b6a04361b9dae4ee5340a4f1"
+ENVIRONMENTS = {
+    "staging": {
+        "wordpress_url": "https://stateparks.stage.utah.gov",
+        # TODO: Update this to point to a staging parks feature layer after one is created
+        "parks_feature_layer_itemid": "45847ee7b6a04361b9dae4ee5340a4f1",
+    },
+    "production": {
+        "wordpress_url": "https://stateparks.utah.gov",
+        "parks_feature_layer_itemid": "45847ee7b6a04361b9dae4ee5340a4f1",
+    },
+}
+
+DEPLOYMENT_ENVIRONMENT = os.environ.get("DEPLOYMENT_ENVIRONMENT", "staging")
+if DEPLOYMENT_ENVIRONMENT not in ENVIRONMENTS:
+    raise ValueError(
+        f"Unsupported DEPLOYMENT_ENVIRONMENT: {DEPLOYMENT_ENVIRONMENT!r}. Expected one of: {', '.join(ENVIRONMENTS)}"
+    )
+
+WORDPRESS_URL = ENVIRONMENTS[DEPLOYMENT_ENVIRONMENT]["wordpress_url"]
+PARKS_FEATURE_LAYER_ITEMID = ENVIRONMENTS[DEPLOYMENT_ENVIRONMENT]["parks_feature_layer_itemid"]
 
 #: Cloud Tasks queue path: projects/{project}/locations/{region}/queues/{queue_name}
 CLOUD_TASKS_QUEUE = f"projects/{HOST_NAME}/locations/us-central1/queues/state-parks-queue"

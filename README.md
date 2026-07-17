@@ -30,7 +30,8 @@ Feature Service: <https://utah.maps.arcgis.com/home/item.html?id=45847ee7b6a0436
 
 ### Production
 
-??
+WordPress Site: <https://stateparks.utah.gov/parks/>
+Feature Service: <https://utah.maps.arcgis.com/home/item.html?id=45847ee7b6a04361b9dae4ee5340a4f1/>
 
 ## Development Setup
 
@@ -61,3 +62,14 @@ Skids use GCP Secrets Manager to make secrets available to the function. They ar
 The `secrets.json` folder holds all the login info, etc. A template is available in the repo's root directory. This is read into a dictionary with the `json` package via the `_get_secrets()` function. Other files (`known_hosts`, service account keys) can be handled in a similar manner or just have their path available for direct access.
 
 A separate `config.py` module holds non-secret configuration values. These are accessed by importing the module and accessing them directly.
+
+### Deployment Environments
+
+Non-secret, environment-specific values (WordPress base URL, ArcGIS Online feature layer item ID, and the worker service URL) are committed in each service's `config.py` under `staging` and `production` mappings. The deployed Cloud Function receives a `DEPLOYMENT_ENVIRONMENT` runtime variable that selects which mapping is used.
+
+| Deployment | Workflow / trigger | `DEPLOYMENT_ENVIRONMENT` |
+| ---------- | ------------------ | ------------------------ |
+| Staging (dev) | `.github/workflows/push.yml` on `dev` | `staging` |
+| Production | `.github/workflows/release.yml` on release published | `production` |
+
+Local development defaults to `staging` when `DEPLOYMENT_ENVIRONMENT` is not set, so no extra configuration is required to run or test the skid locally.
