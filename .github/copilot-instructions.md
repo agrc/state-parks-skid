@@ -7,3 +7,4 @@
 - Use `pathlib.Path` for file paths, type-friendly pandas/GeoPandas operations for tabular and spatial data, and module loggers for operational failures.
 - Add or update focused tests in `tests/test_state_parks.py` when changing service behavior, especially failure paths and external-service interactions. Mock network and cloud SDK calls in tests.
 - Run `pytest` before completing Python changes. Follow the configured Ruff line length of 120 characters.
+- Check for an existing conda environment called "state-parks" before you try creating a new one on your own.
