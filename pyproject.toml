@@ -3,7 +3,8 @@ line-length = 120
 lint.ignore = ["E501"]
 [tool.pytest.ini_options]
 minversion = "6.0"
-testpaths = ["tests", "src"]
+testpaths = ["tests"]
+pythonpath = ["src"]
 norecursedirs = [".env", "data", "maps", ".github", ".vscode"]
 console_output_style = "count"
 addopts = "--cov-branch --cov=state_parks --cov-report term --cov-report xml:cov.xml"
