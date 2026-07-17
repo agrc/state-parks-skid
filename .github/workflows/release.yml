@@ -24,6 +24,7 @@ jobs:
           project_id: ${{ secrets.PROJECT_ID }}
           identity_provider: ${{ secrets.IDENTITY_PROVIDER }}
           service_account_email: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+          deployment_environment: production
 
   notify:
     name: Notifications

@@ -10,6 +10,9 @@ inputs:
   service_account_email:
     description: "The service account email"
     required: true
+  deployment_environment:
+    description: "Deployment environment selector (staging or production)"
+    required: true
 
 runs:
   using: composite
@@ -35,6 +38,8 @@ runs:
         service_timeout: 9m
         secrets: |
           /secrets/app/secrets.json=${{ inputs.project_id }}/skid-secrets
+        environment_variables: |
+          DEPLOYMENT_ENVIRONMENT=${{ inputs.deployment_environment }}
         max_instance_count: 1
         event_trigger_retry: false
 
@@ -51,5 +56,7 @@ runs:
         service_timeout: 9m
         secrets: |
           /secrets/app/secrets.json=${{ inputs.project_id }}/skid-secrets
+        environment_variables: |
+          DEPLOYMENT_ENVIRONMENT=${{ inputs.deployment_environment }}
         max_instance_count: 1
         event_trigger_retry: false
