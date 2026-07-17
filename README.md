@@ -4,6 +4,10 @@
 
 A function that pulls data from the Utah State Parks WorkPress website and updates a feature service in ArcGIS Online. The skid is automatically run, via a [WP Webhook plugin](https://wp-webhooks.com/), any time a post is edited.
 
+Contacts:
+
+Aaron Mcelwee (DXP Team)
+
 ## Overview
 
 This project defines two Cloud Run services and an experience builder app that is embedded in the Utah State Parks website.
@@ -26,6 +30,8 @@ Feature Service: <https://utah.maps.arcgis.com/home/item.html?id=45847ee7b6a0436
 
 ### Production
 
+??
+
 ## Development Setup
 
 This all presumes you're working in Visual Studio Code.
@@ -33,12 +39,9 @@ This all presumes you're working in Visual Studio Code.
 1. Create new environment for the project and install Python
    - `conda create --name state-parks python=3.13`
    - `conda activate state-parks`
-1. Open the repo folder in VS Code
-1. Install the skid in your conda environment as an editable package for development
-   - This will install all the normal and development dependencies (palletjack, supervisor, etc)
-   - `cd c:\path\to\repo`
-   - `pip install -e .[tests]`
-   - add any additional project requirements to the `setup.py:install_requires` list
+1. Install both of the `requirements.txt` files in the `src/state_parks` and `src/webhook_trigger` directories
+   - `pip install -r src/state_parks/requirements.txt`
+   - `pip install -r src/webhook_trigger/requirements.txt`
 1. Set config variables and secrets
    - `secrets.json` holds passwords, secret keys, etc, and will not (and should not) be tracked in git
    - `config.py` holds all the other configuration variables that can be publicly exposed in git
@@ -49,9 +52,7 @@ This all presumes you're working in Visual Studio Code.
 
 ### Running Locally
 
-Because the Docker container is just `pip install`ing your module and running the entry point defined in `setup.py`, you can generally run your code locally by doing the same (it should already be installed in your conda environment in the development steps listed above). You can run it via VS Code's debugger as well running it as a module. A `.main` entry point is predefined in `.vscode/launch.json`.
-
-To test it in the Docker container's environment, you can run use the `Dockerfile` to create a container and run it locally using a tool like [Podman](https://podman.io/).
+To run the skid locally, run the "Run state parks skid" configuration in VS Code's debugger.
 
 ### Handling Secrets and Configuration Files
 
