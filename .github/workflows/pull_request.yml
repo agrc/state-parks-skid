@@ -22,7 +22,10 @@ jobs:
         with:
           python-version-file: .python-version
           cache: pip
-          cache-dependency-path: setup.py
+          cache-dependency-path: |
+            pyproject.toml
+            src/state_parks/requirements.txt
+            src/webhook_trigger/requirements.txt
 
       - name: Install libkrb5 for Kerberos on Linux
         run: |
@@ -30,7 +33,7 @@ jobs:
           sudo apt-get install -y libkrb5-dev
 
       - name: Install module
-        run: pip install .[tests]
+        run: pip install --group dev -r src/state_parks/requirements.txt -r src/webhook_trigger/requirements.txt
 
       - name: 🧶 Lint
         run: ruff check --output-format=github .
