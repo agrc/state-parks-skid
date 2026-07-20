@@ -1,5 +1,35 @@
 # Changelog
 
+## 1.0.0 (2026-07-20)
+
+
+### Features
+
+* cloud run function services to respond to wp webhook and pull data from wp to agol ([30c9913](https://github.com/agrc/state-parks-skid/commit/30c99137f7efdfa5055f8e6f2eac90ccff22f79d))
+* enhance data loading with backup restore and logging improvements ([15f3746](https://github.com/agrc/state-parks-skid/commit/15f3746bf0b57890279f9dca98a16e41a9fa8d96))
+* update lat/long and geometry from wp ([05cc45c](https://github.com/agrc/state-parks-skid/commit/05cc45cb7a99a395ec7615809654cb99a95cc713))
+
+
+### Bug Fixes
+
+* better logging of unmatched data ([76e5c49](https://github.com/agrc/state-parks-skid/commit/76e5c4963dc7bbc49e696ffad755a67db5a49aa1))
+* clean up logging ([1d12360](https://github.com/agrc/state-parks-skid/commit/1d123606056f4cbf3eeac35c421a7dcbc782c22d))
+* more popup refinements ([6bcf7e4](https://github.com/agrc/state-parks-skid/commit/6bcf7e4eca122c4470fb226b5726f03730ac8568))
+* popup layout refinements ([87fe2ac](https://github.com/agrc/state-parks-skid/commit/87fe2ac2e1fc21c49511b2452359e88cefc32de6))
+* prevent duplicate tasks ([3e42b1d](https://github.com/agrc/state-parks-skid/commit/3e42b1d4623587e9e94e6e961c5de7ad8f50273f))
+* switch to upsert palletjack solution for updating agol data ([0480830](https://github.com/agrc/state-parks-skid/commit/04808303b29bac5fb03280853e88558c5f4af504))
+
+
+### Dependencies
+
+* bump palletjack ([af74a8b](https://github.com/agrc/state-parks-skid/commit/af74a8bfa9ef9c17698a6974c44039738427e686))
+* **dev:** update pytest requirement from &gt;=6 to &gt;=9.1.1 ([ed6fbb9](https://github.com/agrc/state-parks-skid/commit/ed6fbb9fbc444b3c1d7b158f91bc33a5a374bf66))
+
+
+### Documentation
+
+* update docs to reflect project specifics ([893fe3e](https://github.com/agrc/state-parks-skid/commit/893fe3e7a7e22762f9d7fe58177acaf51d9f2102))
+
 ## [1.0.1](https://github.com/agrc/skid/compare/v1.0.0...v1.0.1) (2026-01-29)
 
 
