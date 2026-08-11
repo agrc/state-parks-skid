@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/agrc/state-parks-skid/compare/v1.0.0...v1.0.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* resolve ruff lint failures after CI dependency bump ([b64c010](https://github.com/agrc/state-parks-skid/commit/b64c010da0bbf74440f6c29ccd37328dacb27bc9))
+
 ## 1.0.0 (2026-07-20)
 
 
