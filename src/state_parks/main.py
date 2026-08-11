@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# * coding: utf8 *
 """
 Run the state-parks script as a Cloud Run Job or console entry point.
 """
