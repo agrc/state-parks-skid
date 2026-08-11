@@ -18,7 +18,7 @@ try:
         if not project_id:
             raise ValueError
         HOST_NAME = project_id
-except Exception:
+except (OSError, ValueError):
     HOST_NAME = socket.gethostname()
 
 LOG_LEVEL = logging.DEBUG

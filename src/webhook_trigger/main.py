@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# * coding: utf8 *
 """
 Webhook trigger: receives an authenticated HTTP request, clears the Cloud Tasks queue,
 and enqueues a new task for the state-parks worker service.
@@ -110,7 +108,7 @@ def trigger(request):
     if not payload or "post" not in payload:
         module_logger.error("Missing required parameter: post")
         return jsonify({"error": "Missing required parameter: post"}), 400
-    
+
     post_name = payload["post"].get("post_name")
     if not post_name:
         module_logger.error("Missing required parameter: post_name")
