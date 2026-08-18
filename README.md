@@ -33,6 +33,16 @@ Feature Service: <https://utah.maps.arcgis.com/home/item.html?id=45847ee7b6a0436
 WordPress Site: <https://stateparks.utah.gov/parks/>
 Feature Service: <https://utah.maps.arcgis.com/home/item.html?id=45847ee7b6a04361b9dae4ee5340a4f1/>
 
+## WordPress Webhook Setup
+
+Settings -> WP Webhooks -> Send Data -> Post updated -> Add Webhook URL
+
+Webhook Name: `agol-update`
+
+Webhook URL: `<webhook-trigger service URL>?api-key=<webhook-trigger service API key>`
+
+The api key is in this project's secrets.
+
 ## Development Setup
 
 This all presumes you're working in Visual Studio Code.
@@ -67,9 +77,9 @@ A separate `config.py` module holds non-secret configuration values. These are a
 
 Non-secret, environment-specific values (WordPress base URL, ArcGIS Online feature layer item ID, and the worker service URL) are committed in each service's `config.py` under `staging` and `production` mappings. The deployed Cloud Function receives a `DEPLOYMENT_ENVIRONMENT` runtime variable that selects which mapping is used.
 
-| Deployment | Workflow / trigger | `DEPLOYMENT_ENVIRONMENT` |
-| ---------- | ------------------ | ------------------------ |
-| Staging (dev) | `.github/workflows/push.yml` on `dev` | `staging` |
-| Production | `.github/workflows/release.yml` on release published | `production` |
+| Deployment    | Workflow / trigger                                   | `DEPLOYMENT_ENVIRONMENT` |
+| ------------- | ---------------------------------------------------- | ------------------------ |
+| Staging (dev) | `.github/workflows/push.yml` on `dev`                | `staging`                |
+| Production    | `.github/workflows/release.yml` on release published | `production`             |
 
 Local development defaults to `staging` when `DEPLOYMENT_ENVIRONMENT` is not set, so no extra configuration is required to run or test the skid locally.
