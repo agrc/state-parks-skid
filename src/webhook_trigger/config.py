@@ -31,8 +31,7 @@ ENVIRONMENTS = {
         "worker_url": "https://state-parks-skid-pn4shk4ynq-uc.a.run.app",
     },
     "production": {
-        # TODO: Set the production worker URL after the first deployment
-        "worker_url": "",
+        "worker_url": "https://us-central1-ut-dts-ugrc-st-parks-skid-prod.cloudfunctions.net/state-parks-skid",
     },
 }
 
