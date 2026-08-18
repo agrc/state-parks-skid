@@ -25,6 +25,54 @@ def test_get_secrets_from_local_location(mocker):
     assert exists_mock.call_count == 2
 
 
+def test_get_processed_generation_returns_zero_when_no_state_document(mocker):
+    client = mocker.Mock()
+    snapshot = mocker.Mock(exists=False)
+    client.collection.return_value.document.return_value.get.return_value = snapshot
+
+    generation = main._get_processed_generation(client)
+
+    assert generation == 0
+
+
+def test_get_processed_generation_reads_completion_watermark(mocker):
+    client = mocker.Mock()
+    snapshot = mocker.Mock(exists=True)
+    snapshot.to_dict.return_value = {"processed_generation": 42}
+    client.collection.return_value.document.return_value.get.return_value = snapshot
+
+    generation = main._get_processed_generation(client)
+
+    assert generation == 42
+
+
+def test_get_latest_generation_reads_pending_watermark(mocker):
+    client = mocker.Mock()
+    snapshot = mocker.Mock(exists=True)
+    snapshot.to_dict.return_value = {"latest_generation": 42}
+    client.collection.return_value.document.return_value.get.return_value = snapshot
+
+    generation = main._get_latest_generation(client)
+
+    assert generation == 42
+
+
+def test_mark_generation_processed_does_not_regress_watermark(mocker):
+    client = mocker.Mock()
+    transaction = mocker.Mock()
+    state_reference = client.collection.return_value.document.return_value
+    snapshot = mocker.Mock(exists=True)
+    snapshot.to_dict.return_value = {"processed_generation": 42}
+    state_reference.get.return_value = snapshot
+    client.transaction.return_value = transaction
+    mocker.patch("state_parks.main.firestore.transactional", new=lambda function: function)
+
+    generation = main._mark_generation_processed(client, 41)
+
+    assert generation == 42
+    transaction.set.assert_called_once_with(state_reference, {"processed_generation": 42}, merge=True)
+
+
 def test_get_park_name_gets_name_without_state_park_suffix():
     title_from_wordpress = {"rendered": "Antelope Island State Park"}
     park_name = main._get_park_name(title_from_wordpress)

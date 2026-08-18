@@ -54,3 +54,5 @@ PARKS_FEATURE_LAYER_ITEMID = ENVIRONMENTS[DEPLOYMENT_ENVIRONMENT]["parks_feature
 
 #: Cloud Tasks queue path: projects/{project}/locations/{region}/queues/{queue_name}
 CLOUD_TASKS_QUEUE = f"projects/{HOST_NAME}/locations/us-central1/queues/state-parks-queue"
+SYNC_STATE_COLLECTION = "state-parks-sync-state"
+SYNC_STATE_DOCUMENT = DEPLOYMENT_ENVIRONMENT

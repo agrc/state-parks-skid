@@ -12,6 +12,7 @@
     "Codecov",
     "cooldown",
     "finditer",
+    "Firestore",
     "geodatabase",
     "getenv",
     "gethostname",

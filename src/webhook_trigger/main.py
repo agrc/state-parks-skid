@@ -12,7 +12,7 @@ from urllib.parse import urlencode
 import functions_framework
 from flask import jsonify
 from google.api_core.exceptions import AlreadyExists
-from google.cloud import tasks_v2
+from google.cloud import firestore, tasks_v2
 from google.protobuf import timestamp_pb2
 
 from . import config
@@ -20,19 +20,39 @@ from . import config
 module_logger = logging.getLogger(config.SKID_NAME)
 
 
-def _get_task_name():
-    """Build the singleton Cloud Tasks name used to de-duplicate refresh requests."""
+def _get_task_name(generation):
+    """Build the Cloud Tasks name for one durable webhook generation."""
 
-    return f"{config.CLOUD_TASKS_QUEUE}/tasks/{config.TASK_ID}"
+    return f"{config.CLOUD_TASKS_QUEUE}/tasks/state-parks-refresh-{generation}"
 
 
-def _create_refresh_task(client, post_name, secrets):
-    """Create a singleton refresh task or return the existing task name if already queued."""
+def _record_webhook(client, post_name):
+    """Persist a webhook as the next synchronization generation."""
 
-    worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name})}"
+    state_reference = client.collection(config.SYNC_STATE_COLLECTION).document(config.SYNC_STATE_DOCUMENT)
+
+    @firestore.transactional
+    def increment_generation(transaction):
+        snapshot = state_reference.get(transaction=transaction)
+        state = snapshot.to_dict() if snapshot.exists else {}
+        generation = state.get("latest_generation", 0) + 1
+        transaction.set(
+            state_reference,
+            {"latest_generation": generation, "latest_post_name": post_name},
+            merge=True,
+        )
+        return generation
+
+    return increment_generation(client.transaction())
+
+
+def _create_refresh_task(client, post_name, secrets, generation):
+    """Create a refresh task for one recorded webhook generation."""
+
+    worker_url = f"{config.WORKER_URL}?{urlencode({'post_name': post_name, 'generation': generation})}"
     schedule_time = timestamp_pb2.Timestamp()
     schedule_time.FromDatetime(datetime.now(tz=timezone.utc) + timedelta(seconds=config.QUEUE_DELAY_SECONDS))
-    task_name = _get_task_name()
+    task_name = _get_task_name(generation)
     new_task = tasks_v2.Task(
         name=task_name,
         http_request=tasks_v2.HttpRequest(
@@ -52,7 +72,7 @@ def _create_refresh_task(client, post_name, secrets):
         return created.name, True
     except AlreadyExists:
         module_logger.info(
-            "Task %s already exists; coalescing duplicate request for post_name '%s'", task_name, post_name
+            "Task %s already exists for webhook generation %d and post_name '%s'", task_name, generation, post_name
         )
         return task_name, False
 
@@ -83,7 +103,7 @@ def _get_secrets():
 
 @functions_framework.http
 def trigger(request):
-    """Cloud Run HTTP endpoint that authenticates the caller, clears the Cloud Tasks queue,
+    """Cloud Run HTTP endpoint that authenticates the caller, records its work in Firestore,
     and enqueues a new task targeting the worker service for the given post.
 
     URL parameters:
@@ -114,9 +134,8 @@ def trigger(request):
         module_logger.error("Missing required parameter: post_name")
         return jsonify({"error": "Missing required parameter: post_name"}), 400
 
-    client = tasks_v2.CloudTasksClient()
-
-    task_name, created = _create_refresh_task(client, post_name, secrets)
+    generation = _record_webhook(firestore.Client(), post_name)
+    task_name, created = _create_refresh_task(tasks_v2.CloudTasksClient(), post_name, secrets, generation)
     status = "queued" if created else "already_queued"
 
-    return jsonify({"status": "ok", "task": task_name, "enqueue_status": status}), 200
+    return jsonify({"status": "ok", "generation": generation, "task": task_name, "enqueue_status": status}), 200

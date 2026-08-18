@@ -16,6 +16,7 @@ import functions_framework
 import geopandas as gpd
 import pandas as pd
 from flask import jsonify
+from google.cloud import firestore
 from palletjack import extract, load, utils
 
 from . import config
@@ -50,6 +51,48 @@ def _log_service_feature_count(loader, context):
 
     module_logger.info("Feature service row count %s: %d", context, count)
     return count
+
+
+def _get_sync_state_reference(client):
+    """Return the Firestore document shared with the webhook trigger."""
+
+    return client.collection(config.SYNC_STATE_COLLECTION).document(config.SYNC_STATE_DOCUMENT)
+
+
+def _get_processed_generation(client):
+    """Return the highest webhook generation covered by a successful synchronization."""
+
+    snapshot = _get_sync_state_reference(client).get()
+    if not snapshot.exists:
+        return 0
+
+    return snapshot.to_dict().get("processed_generation", 0)
+
+
+def _get_latest_generation(client):
+    """Return the newest webhook generation observed before starting a synchronization."""
+
+    snapshot = _get_sync_state_reference(client).get()
+    if not snapshot.exists:
+        return 0
+
+    return snapshot.to_dict().get("latest_generation", 0)
+
+
+def _mark_generation_processed(client, generation):
+    """Advance the completion watermark after a successful synchronization."""
+
+    state_reference = _get_sync_state_reference(client)
+
+    @firestore.transactional
+    def update_processed_generation(transaction):
+        snapshot = state_reference.get(transaction=transaction)
+        state = snapshot.to_dict() if snapshot.exists else {}
+        processed_generation = max(state.get("processed_generation", 0), generation)
+        transaction.set(state_reference, {"processed_generation": processed_generation}, merge=True)
+        return processed_generation
+
+    return update_processed_generation(client.transaction())
 
 
 def _update_and_add(loader, update_data_df, add_data_df):
@@ -199,6 +242,18 @@ def process(request):
     if not post_name:
         return jsonify({"error": "Missing required parameter: post_name"}), 400
 
+    generation_value = request.args.get("generation")
+    try:
+        generation = int(generation_value) if generation_value is not None else None
+    except ValueError:
+        return jsonify({"error": "Invalid parameter: generation"}), 400
+
+    firestore_client = firestore.Client() if generation is not None else None
+    if generation is not None and generation <= _get_processed_generation(firestore_client):
+        return jsonify({"status": "already_processed", "post_name": post_name, "generation": generation}), 200
+
+    covered_generation = _get_latest_generation(firestore_client) if firestore_client is not None else None
+
     #: Set up secrets, tempdir, and logging
     secrets = SimpleNamespace(**_get_secrets())
 
@@ -309,7 +364,12 @@ def process(request):
         loader = load.ServiceUpdater(gis, config.PARKS_FEATURE_LAYER_ITEMID, working_dir=tempdir_path)
         features_loaded = _update_and_add(loader, update_data_df, add_data_df)
 
+    if firestore_client is not None:
+        _mark_generation_processed(firestore_client, covered_generation)
+
     return_object = {"status": "ok", "post_name": post_name, "features_loaded": features_loaded}
+    if generation is not None:
+        return_object["generation"] = generation
 
     try:
         return jsonify(return_object), 200

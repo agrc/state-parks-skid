@@ -1,3 +1,4 @@
 functions-framework>=3,<4
+google-cloud-firestore>=2,<3
 ugrc-palletjack>=5.0,<6.1
 arcgis

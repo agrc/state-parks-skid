@@ -18,7 +18,20 @@ This function uses palletjack to extract features from the WordPress REST API, t
 
 ### `webhook-trigger`
 
-This function received web hook calls from the WordPress plugin. It then schedules a task to run in a Cloud Tasks Queue five minutes into the future. It also checks for any pending tasks in the queue and cancels them. This way, if multiple webhooks are received in a short period of time, only one execution of the `state-parks-skid` will be triggered.
+This function receives web hook calls from the WordPress plugin, records each call as a monotonically increasing generation in Firestore, and schedules a generation-specific Cloud Task five minutes into the future. The worker only marks a generation complete after the full synchronization succeeds. Tasks for generations already covered by a later successful run return without repeating the synchronization, so a burst of webhook calls can be covered by one run without losing work.
+
+Firestore stores one document per deployment environment at `state-parks-sync-state/{environment}`. For example, the
+staging document might contain:
+
+```json
+{
+  "latest_generation": 42,
+  "latest_post_name": "antelope-island",
+  "processed_generation": 40
+}
+```
+
+Here, webhook generations `41` and `42` still need coverage. After a successful skid run that began after both webhooks were recorded, `processed_generation` advances to `42`. A webhook received while that run is in progress increments `latest_generation` again and leaves a newer generation for a follow-up run.
 
 ## Links
 
