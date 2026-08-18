@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/agrc/state-parks-skid/compare/v1.0.1...v1.0.2) (2026-08-18)
+
+
+### Bug Fixes
+
+* add prod worker url ([56c8b50](https://github.com/agrc/state-parks-skid/commit/56c8b500ebad47a7447aa0c7035d702c4e51369e))
+
 ## [1.0.1](https://github.com/agrc/state-parks-skid/compare/v1.0.0...v1.0.1) (2026-08-11)
 
 
