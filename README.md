@@ -65,6 +65,16 @@ This all presumes you're working in Visual Studio Code.
 
 To run the skid locally, run the "Run state parks skid" configuration in VS Code's debugger.
 
+### Running in the Cloud
+
+From the cloud shell:
+
+```sh
+curl -X POST \
+  "<webhook-trigger service URL>?post_name=developer" \
+  -H "Authorization: Bearer $(gcloud auth print-identity-token)"
+```
+
 ### Handling Secrets and Configuration Files
 
 Skids use GCP Secrets Manager to make secrets available to the function. They are mounted as local files with a specified mounting directory (`/secrets`). In this mounting scheme, a folder can only hold a single secret, so multiple secrets are handled via nesting folders (ie, `/secrets/app` and `secrets/ftp`). These mount points are specified in the GitHub CI action workflow.
