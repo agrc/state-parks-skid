@@ -233,9 +233,12 @@ def process(request):
 
     URL parameters:
         post_name (str): The WordPress post slug/name identifying the park triggering the update.
+        generation (int): The webhook generation being processed. Generations at or below the
+            processed watermark return an ``already_processed`` response without synchronizing.
 
     Returns:
-        JSON response with HTTP 200 on success or 400 on missing parameters.
+        JSON response with HTTP 200 on success or when the generation was already processed,
+        400 on missing or invalid parameters, or 500 when synchronization fails.
     """
 
     post_name = request.args.get("post_name")
