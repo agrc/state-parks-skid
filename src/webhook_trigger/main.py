@@ -134,8 +134,13 @@ def trigger(request):
         module_logger.error("Missing required parameter: post_name")
         return jsonify({"error": "Missing required parameter: post_name"}), 400
 
-    generation = _record_webhook(firestore.Client(), post_name)
-    task_name, created = _create_refresh_task(tasks_v2.CloudTasksClient(), post_name, secrets, generation)
+    try:
+        generation = _record_webhook(firestore.Client(), post_name)
+        task_name, created = _create_refresh_task(tasks_v2.CloudTasksClient(), post_name, secrets, generation)
+    except Exception:
+        module_logger.exception("Unable to record or enqueue webhook for post_name '%s'", post_name)
+        return jsonify({"error": "Unable to queue refresh task"}), 500
+
     status = "queued" if created else "already_queued"
 
     return jsonify({"status": "ok", "generation": generation, "task": task_name, "enqueue_status": status}), 200

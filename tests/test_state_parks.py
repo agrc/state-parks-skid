@@ -1,8 +1,40 @@
 import geopandas as gpd
 import pandas as pd
 import pytest
+from flask import Flask, request
 
 from state_parks import main
+
+
+def test_process_returns_bad_request_for_invalid_generation(mocker):
+    app = Flask(__name__)
+    get_secrets = mocker.patch.object(main, "_get_secrets")
+
+    with app.test_request_context("/?post_name=antelope-island&generation=invalid"):
+        response, status_code = main.process(request)
+
+    assert status_code == 400
+    assert response.get_json() == {"error": "Invalid parameter: generation"}
+    get_secrets.assert_not_called()
+
+
+def test_process_returns_already_processed_without_running_synchronization(mocker):
+    app = Flask(__name__)
+    firestore_client = mocker.Mock()
+    mocker.patch.object(main.firestore, "Client", return_value=firestore_client)
+    mocker.patch.object(main, "_get_processed_generation", return_value=42)
+    get_secrets = mocker.patch.object(main, "_get_secrets")
+
+    with app.test_request_context("/?post_name=antelope-island&generation=42"):
+        response, status_code = main.process(request)
+
+    assert status_code == 200
+    assert response.get_json() == {
+        "status": "already_processed",
+        "post_name": "antelope-island",
+        "generation": 42,
+    }
+    get_secrets.assert_not_called()
 
 
 def test_get_secrets_from_gcp_location(mocker):

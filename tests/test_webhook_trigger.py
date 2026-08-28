@@ -56,6 +56,7 @@ def test_trigger_returns_already_queued_status_for_duplicate_task(mocker):
         "webhook_trigger.main._get_secrets", return_value={"API_KEY": "secret", "SA_EMAIL": "worker@example.com"}
     )
     mocker.patch("webhook_trigger.main.firestore.Client")
+    mocker.patch("webhook_trigger.main.tasks_v2.CloudTasksClient")
     mocker.patch("webhook_trigger.main._record_webhook", return_value=42)
     mocker.patch("webhook_trigger.main._create_refresh_task", return_value=(webhook_main._get_task_name(42), False))
 
@@ -65,3 +66,24 @@ def test_trigger_returns_already_queued_status_for_duplicate_task(mocker):
     assert status_code == 200
     assert response.get_json()["enqueue_status"] == "already_queued"
     assert response.get_json()["generation"] == 42
+
+
+def test_trigger_returns_server_error_when_task_creation_fails(mocker):
+    app = Flask(__name__)
+    mocker.patch(
+        "webhook_trigger.main._get_secrets", return_value={"API_KEY": "secret", "SA_EMAIL": "worker@example.com"}
+    )
+    mocker.patch("webhook_trigger.main._record_webhook", return_value=42)
+    mocker.patch("webhook_trigger.main.firestore.Client")
+    mocker.patch("webhook_trigger.main.tasks_v2.CloudTasksClient")
+    mocker.patch("webhook_trigger.main._create_refresh_task", side_effect=RuntimeError("Cloud Tasks unavailable"))
+    exception_logger = mocker.patch.object(webhook_main.module_logger, "exception")
+
+    with app.test_request_context("/?api_key=secret", json={"post": {"post_name": "antelope-island"}}):
+        response, status_code = webhook_main.trigger(request)
+
+    assert status_code == 500
+    assert response.get_json() == {"error": "Unable to queue refresh task"}
+    exception_logger.assert_called_once_with(
+        "Unable to record or enqueue webhook for post_name '%s'", "antelope-island"
+    )
