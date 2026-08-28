@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/agrc/state-parks-skid/compare/v1.0.2...v1.0.3) (2026-08-28)
+
+
+### Bug Fixes
+
+* switch to using firestore to track skid runs ([2220a92](https://github.com/agrc/state-parks-skid/commit/2220a920c56a4282e7318a171856ed28e9a77b1a))
+
 ## [1.0.2](https://github.com/agrc/state-parks-skid/compare/v1.0.1...v1.0.2) (2026-08-18)
 
 
