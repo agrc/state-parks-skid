@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.4](https://github.com/agrc/state-parks-skid/compare/v1.0.3...v1.0.4) (2026-09-02)
+
+
+### Styles
+
+* decrease height of popup buttons ([2b0860c](https://github.com/agrc/state-parks-skid/commit/2b0860cfab059afe38f9944218e27972dd38a1b3))
+* tweak padding again to make Aaron's day ([933a3db](https://github.com/agrc/state-parks-skid/commit/933a3db65f36b6f7ce9739824cd199e079b7f597))
+
 ## [1.0.3](https://github.com/agrc/state-parks-skid/compare/v1.0.2...v1.0.3) (2026-08-28)
 
 
