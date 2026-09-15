@@ -159,6 +159,10 @@ def test_build_sync_dataframes_updates_adds_and_skips_expected_parks(mocker):
     assert set(update_data_df["OBJECTID"]) == {1}
     assert "OBJECTID" not in add_data_df.columns
     assert add_data_df["full_name"].tolist() == ["New State Park"]
+    assert add_data_df["truncated_name"].tolist() == ["new"]
+    assert add_data_df["label_state"].tolist() == ["UT"]
+    assert add_data_df["boatramp"].tolist() == [False]
+    assert add_data_df["campground"].tolist() == [False]
     assert pd.api.types.is_float_dtype(update_data_df["lat"])
     assert pd.api.types.is_float_dtype(update_data_df["long"])
     assert pd.api.types.is_float_dtype(add_data_df["lat"])
