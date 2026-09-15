@@ -123,7 +123,8 @@ def test_get_park_name_returns_empty_for_missing_or_blank_title():
     assert main._get_park_name(None) == ""
 
 
-def test_build_sync_dataframes_updates_adds_and_skips_expected_parks():
+def test_build_sync_dataframes_updates_adds_and_skips_expected_parks(mocker):
+    info_logger = mocker.patch.object(main.module_logger, "info")
     merged_data = gpd.GeoDataFrame(
         {
             "OBJECTID": [1, 2, None, None],
@@ -165,6 +166,7 @@ def test_build_sync_dataframes_updates_adds_and_skips_expected_parks():
     assert add_data_df.iloc[0].SHAPE.x == -112.0
     assert add_data_df.iloc[0].SHAPE.y == 41.0
     assert skipped_adds["park_name"].tolist() == ["skipped"]
+    info_logger.assert_any_call("new (102.0)")
 
     existing_row = update_data_df.set_index("truncated_name").loc["existing"]
     assert existing_row["lat"] == 40.0
