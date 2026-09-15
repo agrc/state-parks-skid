@@ -173,6 +173,7 @@ def _build_sync_dataframes(merged_data):
     add_candidates = synchronized_data.query("_merge == 'right_only'").copy()
     add_candidates = add_candidates[add_candidates["park_name"].fillna("").str.strip().ne("")]
     add_candidates["truncated_name"] = add_candidates["park_name"]
+    add_candidates["label_state"] = add_candidates["full_name"]
     add_indexes = add_candidates.index.intersection(valid_geometry_copy.index)
     add_data_df = add_candidates.loc[add_indexes].reindex(
         columns=[column for column in output_columns if column != "OBJECTID"]
