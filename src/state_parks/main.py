@@ -177,6 +177,14 @@ def _build_sync_dataframes(merged_data):
         columns=[column for column in output_columns if column != "OBJECTID"]
     )
     skipped_adds = add_candidates.loc[~add_candidates.index.isin(add_indexes)]
+    if not add_data_df.empty:
+        module_logger.info("The following %d WordPress records will be added", len(add_data_df))
+        module_logger.info(
+            ", ".join(
+                f"{row.park_name} ({row.id})"
+                for row in add_candidates.loc[add_indexes, ["park_name", "id"]].itertuples(index=False)
+            )
+        )
 
     return update_data_df, add_data_df, skipped_adds
 
@@ -370,14 +378,6 @@ def process(request):
             )
 
         update_data_df, add_data_df, skipped_adds = _build_sync_dataframes(merged_data)
-        if len(add_data_df) > 0:
-            module_logger.info("The following %d WordPress records will be added", len(add_data_df))
-            module_logger.info(
-                ", ".join(
-                    f"{row.park_name} ({row.id})"
-                    for row in merged_data.loc[add_data_df.index, ["park_name", "id"]].itertuples(index=False)
-                )
-            )
         if len(skipped_adds) > 0:
             module_logger.warning(
                 "The following %d records from WordPress are missing valid coordinates and will not be added",
