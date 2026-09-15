@@ -117,6 +117,12 @@ def test_get_park_name_gets_name_without_state_park_museum_suffix():
     assert park_name == "Edge of the Cedars"
 
 
+def test_get_park_name_returns_empty_for_missing_or_blank_title():
+    assert main._get_park_name({"rendered": "State Park"}) == ""
+    assert main._get_park_name({}) == ""
+    assert main._get_park_name(None) == ""
+
+
 def test_build_sync_dataframes_updates_adds_and_skips_expected_parks():
     merged_data = gpd.GeoDataFrame(
         {
@@ -149,7 +155,7 @@ def test_build_sync_dataframes_updates_adds_and_skips_expected_parks():
 
     update_data_df, add_data_df, skipped_adds = main._build_sync_dataframes(merged_data)
 
-    assert set(update_data_df["OBJECTID"]) == {1, 2}
+    assert set(update_data_df["OBJECTID"]) == {1}
     assert "OBJECTID" not in add_data_df.columns
     assert add_data_df["full_name"].tolist() == ["New State Park"]
     assert pd.api.types.is_float_dtype(update_data_df["lat"])
@@ -166,14 +172,37 @@ def test_build_sync_dataframes_updates_adds_and_skips_expected_parks():
     assert existing_row.SHAPE.x == -111.0
     assert existing_row.SHAPE.y == 40.0
 
-    legacy_row = update_data_df.set_index("truncated_name").loc["legacy"]
-    assert pd.isna(legacy_row["lat"])
-    assert pd.isna(legacy_row["long"])
-    assert legacy_row.SHAPE.x == -109.0
-    assert legacy_row.SHAPE.y == 41.0
-    assert legacy_row["link"] == ""
-    assert legacy_row["activities"] == ""
-    assert legacy_row["facilities"] == ""
+    assert "legacy" not in update_data_df["truncated_name"].tolist()
+
+
+def test_build_sync_dataframes_does_not_add_blank_name_parks():
+    merged_data = gpd.GeoDataFrame(
+        {
+            "OBJECTID": [None],
+            "truncated_name": [None],
+            "label_state": [None],
+            "boatramp": [None],
+            "campground": [None],
+            "activities_wp": [[]],
+            "facilities_wp": [[]],
+            "thumbnail_url_wp": [""],
+            "title": [{"rendered": "State Park"}],
+            "link_wp": ["/blank"],
+            "current_conditions.lat": [40.0],
+            "current_conditions.long": [-111.0],
+            "park_name": [""],
+            "link": ["/blank"],
+            "id": [999],
+            "_merge": ["right_only"],
+        },
+        geometry=gpd.GeoSeries([None], crs="EPSG:4326"),
+        crs="EPSG:4326",
+    ).rename_geometry("SHAPE")
+
+    _, add_data_df, skipped_adds = main._build_sync_dataframes(merged_data)
+
+    assert add_data_df.empty
+    assert skipped_adds.empty
 
 
 def test_update_and_add_updates_existing_rows_and_adds_new_rows(mocker):

@@ -168,9 +168,10 @@ def _build_sync_dataframes(merged_data):
         "long",
         "SHAPE",
     ]
-    update_data_df = synchronized_data.query("_merge != 'right_only'").reindex(columns=output_columns)
+    update_data_df = synchronized_data.query("_merge == 'both'").reindex(columns=output_columns)
 
     add_candidates = synchronized_data.query("_merge == 'right_only'").copy()
+    add_candidates = add_candidates[add_candidates["park_name"].fillna("").str.strip().ne("")]
     add_indexes = add_candidates.index.intersection(valid_geometry_copy.index)
     add_data_df = add_candidates.loc[add_indexes].reindex(
         columns=[column for column in output_columns if column != "OBJECTID"]
@@ -288,6 +289,22 @@ def process(request):
             )
         )
         valid_posts["park_name"] = valid_posts["title"].apply(_get_park_name).str.lower()
+        blank_name_posts = valid_posts["park_name"].fillna("").str.strip().eq("")
+        if blank_name_posts.any():
+            module_logger.warning(
+                "Skipping %d published WordPress posts with no usable park name",
+                blank_name_posts.sum(),
+            )
+            valid_posts = valid_posts.loc[~blank_name_posts].copy()
+
+        duplicate_name_posts = valid_posts["park_name"].duplicated(keep=False)
+        if duplicate_name_posts.any():
+            module_logger.warning(
+                "Skipping %d duplicate published WordPress park records: %s",
+                duplicate_name_posts.sum(),
+                ", ".join(sorted(valid_posts.loc[duplicate_name_posts, "park_name"].unique())),
+            )
+            valid_posts = valid_posts.loc[~valid_posts["park_name"].duplicated(keep="first")].copy()
 
         #: This controls which fields we're pulling from WordPress
         valid_posts = valid_posts.reindex(
@@ -353,6 +370,14 @@ def process(request):
             )
 
         update_data_df, add_data_df, skipped_adds = _build_sync_dataframes(merged_data)
+        if len(add_data_df) > 0:
+            module_logger.info("The following %d WordPress records will be added", len(add_data_df))
+            module_logger.info(
+                ", ".join(
+                    f"{row.park_name} ({row.id})"
+                    for row in merged_data.loc[add_data_df.index, ["park_name", "id"]].itertuples(index=False)
+                )
+            )
         if len(skipped_adds) > 0:
             module_logger.warning(
                 "The following %d records from WordPress are missing valid coordinates and will not be added",
@@ -394,7 +419,13 @@ def _get_park_name(title_from_wordpress):
     Returns:
         str: Title with "State Park" stripped
     """
-    rendered_name = title_from_wordpress["rendered"]
+    if not isinstance(title_from_wordpress, dict):
+        return ""
+
+    rendered_name = title_from_wordpress.get("rendered", "")
+    if not isinstance(rendered_name, str):
+        return ""
+
     name_prefix = rendered_name.split("State Park")[0]
     return name_prefix.strip()
 
