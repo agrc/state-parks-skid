@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.4](https://github.com/agrc/state-parks-skid/compare/v1.0.3...v1.0.4) (2026-09-16)
+
+
+### Bug Fixes
+
+* add missing attributes to newly added WP pages ([627cde5](https://github.com/agrc/state-parks-skid/commit/627cde55a936ea92dca4f3791490123645082b00))
+* log added WordPress records in sync dataframes ([4e26a9f](https://github.com/agrc/state-parks-skid/commit/4e26a9f46423222af956d37bd9427eccfb483b71))
+* populate label_state for new features ([9647e1f](https://github.com/agrc/state-parks-skid/commit/9647e1f9d8b427633f35ebb5b9255441f0bf7ede))
+* prevent empty duplicate records ([c6f0e49](https://github.com/agrc/state-parks-skid/commit/c6f0e492600c81bc8fe5b25cb04ad172c74f7402))
+
+
+### Styles
+
+* decrease height of popup buttons ([2b0860c](https://github.com/agrc/state-parks-skid/commit/2b0860cfab059afe38f9944218e27972dd38a1b3))
+* tweak padding again to make Aaron's day ([933a3db](https://github.com/agrc/state-parks-skid/commit/933a3db65f36b6f7ce9739824cd199e079b7f597))
+
 ## [1.0.3](https://github.com/agrc/state-parks-skid/compare/v1.0.2...v1.0.3) (2026-08-28)
 
 
