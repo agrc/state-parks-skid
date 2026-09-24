@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/agrc/state-parks-skid/compare/v1.0.4...v1.1.0) (2026-09-24)
+
+
+### Features
+
+* add lodging field ([9fbf0dd](https://github.com/agrc/state-parks-skid/commit/9fbf0ddd6c35290b4d760a5a0d6f76dee036c76c))
+
+
+### Documentation
+
+* add filter icon values ([99452a1](https://github.com/agrc/state-parks-skid/commit/99452a1e8b8dcaca2f94dd10e728eced977300fb))
+
 ## [1.0.4](https://github.com/agrc/state-parks-skid/compare/v1.0.3...v1.0.4) (2026-09-16)
 
 
