@@ -134,6 +134,7 @@ def test_build_sync_dataframes_updates_adds_and_skips_expected_parks(mocker):
             "campground": [True, True, None, None],
             "activities_wp": [["Hiking"], None, ["Boating"], ["Fishing"]],
             "facilities_wp": [["Restroom"], None, ["Marina"], ["Dock"]],
+            "lodging_wp": [["Cabins"], None, ["Lodging nearby"], ["Hotel"]],
             "thumbnail_url_wp": ["existing.jpg", None, "new.jpg", "skipped.jpg"],
             "title": [
                 {"rendered": "Existing State Park"},
@@ -161,6 +162,8 @@ def test_build_sync_dataframes_updates_adds_and_skips_expected_parks(mocker):
     assert add_data_df["full_name"].tolist() == ["New State Park"]
     assert add_data_df["truncated_name"].tolist() == ["new"]
     assert add_data_df["label_state"].tolist() == ["New State Park"]
+    assert update_data_df["lodging"].tolist() == ["Cabins"]
+    assert add_data_df["lodging"].tolist() == ["Lodging nearby"]
     assert pd.api.types.is_float_dtype(update_data_df["lat"])
     assert pd.api.types.is_float_dtype(update_data_df["long"])
     assert pd.api.types.is_float_dtype(add_data_df["lat"])
@@ -189,6 +192,7 @@ def test_build_sync_dataframes_does_not_add_blank_name_parks():
             "campground": [None],
             "activities_wp": [[]],
             "facilities_wp": [[]],
+            "lodging_wp": [[]],
             "thumbnail_url_wp": [""],
             "title": [{"rendered": "State Park"}],
             "link_wp": ["/blank"],

@@ -134,6 +134,9 @@ def _build_sync_dataframes(merged_data):
     synchronized_data["facilities"] = (
         synchronized_data["facilities_wp"].fillna("").apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
     )
+    synchronized_data["lodging"] = (
+        synchronized_data["lodging_wp"].fillna("").apply(lambda x: ", ".join(x) if isinstance(x, list) else x)
+    )
     synchronized_data["thumbnail_url"] = synchronized_data["thumbnail_url_wp"].fillna("")
     synchronized_data["full_name"] = synchronized_data["title"].apply(
         lambda x: x["rendered"] if isinstance(x, dict) else x
@@ -163,6 +166,7 @@ def _build_sync_dataframes(merged_data):
         "thumbnail_url",
         "activities",
         "facilities",
+        "lodging",
         "full_name",
         "lat",
         "long",
@@ -324,6 +328,7 @@ def process(request):
                 "thumbnail_url",
                 "activities",
                 "facilities",
+                "lodging",
                 "park_name",
                 "link",
                 "current_conditions.lat",
